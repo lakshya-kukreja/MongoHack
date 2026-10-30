@@ -1,0 +1,81 @@
+[
+  {
+    "eval_id": "EVAL-001",
+    "question": "What was the first sign of trouble in the incident?",
+    "target_intent": "Identify the earliest alert or symptom indicating degradation",
+    "expected_source_ids": ["ALERT-201"],
+    "minimum_expected_source_ids": ["ALERT-201"],
+    "acceptable_supplementary_ids": ["SLACK-301"],
+    "unacceptable_hallucinated_ids": ["ALERT-999", "SLACK-999"],
+    "ground_truth_summary": "At 14:02:00Z, Datadog triggered CRITICAL alert ALERT-201 because checkout-service P99 latency exceeded 2000ms (measured 2840ms).",
+    "evaluation_criteria": {
+      "requires_timestamp_chronology": true,
+      "requires_exact_source_id": "ALERT-201"
+    }
+  },
+  {
+    "eval_id": "EVAL-002",
+    "question": "Who noticed the issue first and who responded or led the incident?",
+    "target_intent": "Identify human responders, the first observer, and the incident commander",
+    "expected_source_ids": ["SLACK-301", "SLACK-302"],
+    "minimum_expected_source_ids": ["SLACK-301"],
+    "acceptable_supplementary_ids": ["SLACK-303"],
+    "ground_truth_summary": "Alice (alice.dev) first noticed the latency alert at 14:04:10Z in SLACK-301. Bob (bob.lead) responded at 14:07:00Z, declared the SEV-1 incident, and acted as Incident Commander in SLACK-302. Marcus (marcus.eng) joined the response in SLACK-303.",
+    "evaluation_criteria": {
+      "must_identify_first_observer": "alice.dev",
+      "must_identify_incident_commander": "bob.lead"
+    }
+  },
+  {
+    "eval_id": "EVAL-003",
+    "question": "Which deployment preceded the incident?",
+    "target_intent": "Identify the release event immediately prior to the degradation",
+    "expected_source_ids": ["DEPLOY-101"],
+    "minimum_expected_source_ids": ["DEPLOY-101"],
+    "acceptable_supplementary_ids": ["SLACK-300"],
+    "ground_truth_summary": "Deployment DEPLOY-101 of checkout-service v2.4.1 (commit a1f9c8d) by marcus.eng occurred at 13:45:00Z, approximately 17 minutes before the first latency alert.",
+    "evaluation_criteria": {
+      "must_identify_version": "v2.4.1",
+      "must_identify_commit": "a1f9c8d"
+    }
+  },
+  {
+    "eval_id": "EVAL-004",
+    "question": "What evidence suggests recovery?",
+    "target_intent": "Identify metrics, alerts, and actions demonstrating system stabilization",
+    "expected_source_ids": ["ALERT-205", "SLACK-307"],
+    "minimum_expected_source_ids": ["ALERT-205"],
+    "acceptable_supplementary_ids": ["DEPLOY-102", "SLACK-308"],
+    "ground_truth_summary": "At 14:28:00Z, Datadog alert ALERT-205 confirmed P99 latency recovered to 142ms, HTTP 500 error rates dropped to 0.02%, and active DB connections normalized to 88 following the rollback to v2.4.0 in DEPLOY-102 and SLACK-307.",
+    "evaluation_criteria": {
+      "must_cite_metric_recovery": "142ms"
+    }
+  },
+  {
+    "eval_id": "EVAL-005",
+    "question": "What was the likely root cause, and what remains unproven?",
+    "target_intent": "Distinguish between the verified technical defect and speculative/unverified hypotheses",
+    "expected_source_ids": ["SLACK-305", "SLACK-309"],
+    "minimum_expected_source_ids": ["SLACK-305"],
+    "acceptable_supplementary_ids": ["DEPLOY-101", "ALERT-204", "SLACK-304", "ALERT-203"],
+    "ground_truth_summary": "The proven root cause was a connection pool leak in db_pool.py introduced in v2.4.1 commit a1f9c8d, where async queries failed to return connections on client timeouts (SLACK-305). Charlie's hypothesis about full disk was disproven (ALERT-203). What remains unproven is whether upstream Stripe webhook latency contributed to the initial trigger, as confirmed in post-mortem note SLACK-309.",
+    "evaluation_criteria": {
+      "must_distinguish_proven_vs_unproven": true,
+      "unproven_item": "Stripe webhook latency"
+    }
+  },
+  {
+    "eval_id": "EVAL-006",
+    "question": "Did an expired SSL certificate on the Kubernetes ingress cause this outage?",
+    "target_intent": "Negative test: verify system explicitly reports lack of evidence rather than hallucinating",
+    "expected_source_ids": [],
+    "minimum_expected_source_ids": [],
+    "acceptable_supplementary_ids": [],
+    "ground_truth_summary": "Based on the retrieved incident records, there is no evidence of an expired SSL certificate or Kubernetes ingress issue. The records show the incident was caused by a database connection pool leak in checkout-service.",
+    "evaluation_criteria": {
+      "must_report_insufficient_evidence": true,
+      "must_not_cite_nonexistent_records": true
+    }
+  }
+]
+
