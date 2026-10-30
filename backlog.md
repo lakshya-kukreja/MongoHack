@@ -1,15 +1,17 @@
 # Project Backlog & Implementation Milestones
 
 ## Overview
-This backlog breaks down the **Incident Timeline Investigator** into 8 incremental, educational milestones. Each milestone includes:
-1. **Core Objective & Scope**
-2. **Prerequisite Concepts** (What the team must understand before writing code)
-3. **Acceptance Criteria** (Measurable signals of completion)
-4. **Estimated Complexity** (S / M / L)
+This backlog breaks down the **Incident Timeline Investigator** into incremental, educational milestones for a two-person team working on separate Git branches:
+- **Person 1 (Backend)**: MongoDB Atlas, data ingestion, vector embeddings, deterministic timeline, RAG generation, and test suite.
+- **Person 2 (Frontend)**: React + TypeScript + Vite app, timeline UI, chat interface, citation chips, event drawer, and API integration.
+
+To maximize velocity, **Person 2 is not blocked by backend progress**. Person 2 can implement the entire frontend using mock responses defined in [`spec.md`](file:///home/asus/MongoHack/spec.md) and [`data/incidents/inc_2026_042.json`](file:///home/asus/MongoHack/data/incidents/inc_2026_042.json).
 
 ---
 
-## Milestone 0: Environment & Project Scaffolding
+## Milestone 0A: Backend Environment & Project Scaffolding
+- **Primary Owner**: **Person 1**
+- **Dependencies**: None
 - **Scope**: Initialize backend directory, Python virtual environment, dependencies (`fastapi`, `uvicorn`, `pymongo`, `pydantic`, `pydantic-settings`, `pytest`, `httpx`), `.env.example`, `.gitignore`, and Git repository.
 - **Concepts to Understand**:
   - *Virtual Environments*: Why we isolate Python packages per project to avoid system conflicts.
@@ -23,7 +25,25 @@ This backlog breaks down the **Incident Timeline Investigator** into 8 increment
 
 ---
 
+## Milestone 0B: Frontend Scaffolding & Mock Infrastructure
+- **Primary Owner**: **Person 2**
+- **Dependencies**: None (unblocked; uses `spec.md` contracts and demo dataset)
+- **Scope**: Initialize React + TypeScript + Vite application in `frontend/`, install Tailwind CSS, create shared TypeScript interfaces matching `spec.md`, and set up a local mock service or fixture loader.
+- **Concepts to Understand**:
+  - *Vite & TypeScript Setup*: Modern frontend build tooling and strict typing.
+  - *Frontend Mocking Strategy*: Decoupling UI development from backend readiness using hardcoded or JSON-loaded fixture states.
+  - *Tailwind Utility Classes*: Rapid styling for responsive split layouts.
+- **Acceptance Criteria**:
+  - [ ] `frontend/` initialized with Vite + React + TypeScript + Tailwind CSS.
+  - [ ] `npm run dev` starts cleanly at `http://localhost:5173`.
+  - [ ] Shared TypeScript interfaces created in `frontend/src/types/api.ts` matching `spec.md`.
+  - [ ] Mock API adapter in `frontend/src/mocks/mockApi.ts` loads [`data/incidents/inc_2026_042.json`](file:///home/asus/MongoHack/data/incidents/inc_2026_042.json) for local offline testing.
+
+---
+
 ## Milestone 1: Event Schema, Ingestion Pipeline & Demo Dataset
+- **Primary Owner**: **Person 1**
+- **Dependencies**: Milestone 0A
 - **Scope**: Define the Pydantic data models for incident events, create the JSON/JSONL parser for heterogeneous sources (Slack, alerts, deployments), and write the realistic demo dataset (`data/incidents/inc_2026_042.json`).
 - **Concepts to Understand**:
   - *Heterogeneous Incident Data*: Why alerts, chat messages, and CI/CD logs look completely different in structure and how to map them to a canonical schema.
@@ -41,6 +61,8 @@ This backlog breaks down the **Incident Timeline Investigator** into 8 increment
 ---
 
 ## Milestone 2: MongoDB Atlas Storage & Vector Indexing
+- **Primary Owner**: **Person 1**
+- **Dependencies**: Milestone 1
 - **Scope**: Connect to MongoDB Atlas, create collection `incident_events`, manage indexes (compound index on `incident_id` + `timestamp`), and define the Atlas Vector Search index configuration.
 - **Concepts to Understand**:
   - *MongoDB Documents vs Tables*: How flexible JSON-like documents accommodate structured payloads alongside unstructured text.
@@ -54,20 +76,24 @@ This backlog breaks down the **Incident Timeline Investigator** into 8 increment
 
 ---
 
-## Milestone 3: Deterministic Timeline Engine & API
-- **Scope**: Implement the deterministic timeline reconstruction engine that sorts, filters, and groups incident events chronologically. Expose the `/api/incidents/{incident_id}/timeline` endpoint.
+## Milestone 3: Deterministic Timeline Engine & API Service
+- **Primary Owner**: **Person 1**
+- **Dependencies**: Milestone 2
+- **Scope**: Implement the deterministic timeline reconstruction engine that sorts, filters, and groups incident events chronologically. Expose the `/api/incidents/{incident_id}/timeline` logic.
 - **Concepts to Understand**:
   - *Deterministic vs Non-Deterministic Operations*: Why event chronology must be calculated by sorting timestamps mathematically rather than asking an LLM to guess what happened first.
-  - *Time Windowing & Filtering*: How investigators zoom in on specific 15-minute or 1-hour intervals to isolate incident cascades.
+  - *Time Windowing & Date-Filtering*: Inclusive boundary conditions (`start_time` and `end_time`) and source-type filtering.
 - **Acceptance Criteria**:
   - [ ] `TimelineService` in `backend/app/services/timeline.py` sorts events strictly by timestamp ascending.
-  - [ ] Supports filtering by `start_time`, `end_time`, and `source_type` (e.g. only show alerts and deploys).
-  - [ ] Endpoint `GET /api/incidents/{incident_id}/timeline` returns formatted chronological events.
+  - [ ] Supports filtering by `start_time`, `end_time` (inclusive ISO-8601), and `source_type`.
+  - [ ] Logic returns formatted chronological events conforming to `TimelineResponse` in `spec.md`.
   - [ ] Unit test in `tests/test_timeline.py` asserts that even if events are inserted out-of-order, the returned timeline is 100% sorted chronologically.
 
 ---
 
 ## Milestone 4: Semantic Vector Retrieval & Evaluation Cases
+- **Primary Owner**: **Person 1**
+- **Dependencies**: Milestone 2, Milestone 3
 - **Scope**: Implement embedding generation and vector search retrieval via MongoDB Atlas `$vectorSearch` with metadata pre-filtering by `incident_id`. Build the automated retrieval evaluation test suite.
 - **Concepts to Understand**:
   - *Embedding Models*: How queries like *"Who acknowledged the alert?"* are embedded into the same semantic space as Slack messages like *"Alice: Taking a look at the checkout errors now"*.
@@ -87,6 +113,8 @@ This backlog breaks down the **Incident Timeline Investigator** into 8 increment
 ---
 
 ## Milestone 5: Grounded LLM Generation & Citation Validation
+- **Primary Owner**: **Person 1**
+- **Dependencies**: Milestone 4
 - **Scope**: Implement prompt engineering for strict factual grounding, call the LLM API, extract citation tokens (`[SOURCE_ID]`), and programmatically validate citations against retrieved evidence records.
 - **Concepts to Understand**:
   - *Grounded Prompting*: Forbidding the model from using prior knowledge outside the provided context documents.
@@ -95,7 +123,7 @@ This backlog breaks down the **Incident Timeline Investigator** into 8 increment
 - **Acceptance Criteria**:
   - [ ] `GeneratorService` in `backend/app/services/generator.py` constructs context blocks with explicit `[EVIDENCE RECORD <source_id>]` headings.
   - [ ] LLM system prompt enforces citation markers like `[ALERT-201]`, explicit uncertainty flags, and handling of unproven hypotheses.
-  - [ ] Post-processor verifies all citation tags against retrieved IDs.
+  - [ ] Post-processor verifies all citation tags against retrieved IDs and returns structured `CitationRecord` objects.
   - [ ] Unit tests in `tests/test_generator.py` test:
     - Normal citation extraction and linking.
     - Hallucinated citation detection (e.g. LLM invents `SLACK-999`).
@@ -103,17 +131,19 @@ This backlog breaks down the **Incident Timeline Investigator** into 8 increment
 
 ---
 
-## Milestone 6: FastAPI Integration & End-to-End Workflow
+## Milestone 6: FastAPI Integration & REST Endpoints
+- **Primary Owner**: **Person 1**
+- **Dependencies**: Milestone 3, Milestone 5
 - **Scope**: Wire together ingestion, timeline, retrieval, and generation into complete FastAPI routes. Add error handling, CORS, and request logging.
 - **Concepts to Understand**:
   - *FastAPI Dependency Injection*: Using `Depends()` for database connections and configuration.
   - *CORS (Cross-Origin Resource Sharing)*: Allowing the Vite frontend (`localhost:5173`) to call the FastAPI backend (`localhost:8000`).
   - *End-to-End Testing*: Simulating a complete user workflow via `TestClient`.
 - **Acceptance Criteria**:
-  - [ ] Full REST API operational:
+  - [ ] Full REST API operational conforming strictly to Section 6 of `spec.md`:
     - `POST /api/incidents/ingest`: Ingests dataset.
     - `GET /api/incidents`: Lists incidents.
-    - `GET /api/incidents/{id}/timeline`: Gets deterministic timeline.
+    - `GET /api/incidents/{id}/timeline`: Gets deterministic timeline with date filters.
     - `POST /api/incidents/{id}/query`: Answers questions with citations.
     - `GET /api/incidents/{id}/events/{source_id}`: Gets event details.
   - [ ] Integration tests in `tests/test_api.py` verify full request-response cycles.
@@ -121,26 +151,45 @@ This backlog breaks down the **Incident Timeline Investigator** into 8 increment
 ---
 
 ## Milestone 7: React + TypeScript Frontend (Timeline + Chat + Citations)
-- **Scope**: Build the user interface with React, TypeScript, and Vite. Features include an incident selector, interactive timeline with color-coded source badges, a conversational investigation chat, clickable citation chips, and an event inspection slide-over drawer.
+- **Primary Owner**: **Person 2**
+- **Dependencies**: Milestone 0B (builds against mocks); Milestone 6 for live backend switch
+- **Scope**: Build the user interface with React, TypeScript, and Vite. Features include an incident selector, interactive timeline with color-coded source badges, date-range picker, conversational investigation chat, clickable citation chips, and an event inspection slide-over drawer.
 - **Concepts to Understand**:
   - *Component Architecture*: Separating stateful page containers from reusable UI components.
   - *Clickable Citation Anchoring*: How clicking a citation badge `[ALERT-201]` interacts with state to highlight an event or open a details drawer.
   - *Responsive Layout*: Splitting the view into a chronological timeline column and an investigation Q&A column.
+  - *API Switch*: Toggling between mock mode (`VITE_USE_MOCK=true`) and live backend API.
 - **Acceptance Criteria**:
-  - [ ] Frontend initializes cleanly with `npm run dev`.
-  - [ ] Timeline renders events chronologically with clear visual differentiation (Slack messages in purple/blue, Alerts in red/amber, Deployments in green).
-  - [ ] Chat panel allows user to submit questions (including quick prompt suggestions for the 5 key questions).
-  - [ ] Generated answers display clickable citation badges.
-  - [ ] Clicking a citation badge opens the Event Inspector Drawer showing raw content and structured payload.
+  - [ ] Timeline renders events chronologically with clear visual differentiation (Slack in purple/blue, Alerts in red/amber, Deployments in green).
+  - [ ] Date-range filter controls update the timeline view accurately.
+  - [ ] Chat panel allows user to submit questions and offers 5 quick prompt presets corresponding to the core investigation queries.
+  - [ ] Generated answers display clickable `<CitationChip>` components.
+  - [ ] Clicking a citation badge opens the Event Inspector Drawer showing raw content, metadata, and structured payload.
+  - [ ] Seamlessly switches from mock API to live FastAPI backend when `VITE_USE_MOCK=false`.
 
 ---
 
-## Milestone 8: Demo Polish, Evaluation Benchmarking & Final Walkthrough
-- **Scope**: Polish UI/UX, verify performance, run the full retrieval evaluation benchmark, document setup steps in `README.md`, and record or script the hackathon demo walkthrough.
-- **Concepts to Understand**:
-  - *Hackathon Demo Storytelling*: How to present the problem, the architectural solution, the deterministic timeline guarantee, and live Q&A with verifiable citations.
+## Milestone 8A: Evaluation Benchmarking & Backend Polish
+- **Primary Owner**: **Person 1**
+- **Dependencies**: Milestone 6
+- **Scope**: Automate evaluation benchmark reporting, measure retrieval latency and Hit Rate@K across the evaluation cases, and verify database index performance.
 - **Acceptance Criteria**:
-  - [ ] Clean `README.md` with step-by-step setup and quickstart instructions.
-  - [ ] Automated script `python scripts/run_eval.py` that runs the evaluation cases and prints a clean benchmark report with hit rates and citation validity.
-  - [ ] End-to-end demo flow runs smoothly without errors.
+  - [ ] Automated script `python scripts/run_eval.py` runs all 6 cases in `data/eval_cases.json` and outputs a formatted table.
+  - [ ] 100% of ground-truth source IDs retrieved in top-5 candidates.
+  - [ ] Backend documentation and configuration instructions finalized in `README.md`.
+
+---
+
+## Milestone 8B: UI Polish, UX Inspection Drawer & Joint Walkthrough
+- **Primary Owner**: **Person 2**
+- **Dependencies**: Milestone 7, Milestone 8A
+- **Scope**: Polish UI micro-interactions, responsive styling, loading skeletons, error toasts, and prepare the demo flow for the hackathon presentation.
+- **Acceptance Criteria**:
+  - [ ] Clean error handling when query fails or backend is unreachable.
+  - [ ] Smooth transitions and clear visual cues when citations are clicked.
+  - [ ] Joint walkthrough with Person 1 demonstrating:
+    1. Incident ingestion & timeline rendering.
+    2. Date filtering.
+    3. Asking the 5 core investigation questions with live verified citations.
+    4. Displaying the unproven hypothesis and negative test case.
 

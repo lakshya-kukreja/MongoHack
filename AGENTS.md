@@ -12,10 +12,26 @@ To keep the codebase maintainable, debuggable, and educational, any AI coding as
 3. **NO LLM-Based Sorting**: The LLM must NEVER be trusted to determine chronology or sort events. Timeline ordering is 100% deterministic, computed by sorting ISO-8601 timestamps in Python or MongoDB.
 4. **NO Silent Overwrites**: Never blindly replace entire files or wipe test cases without understanding why they exist.
 5. **NO Hardcoded Secrets**: Never commit API keys, connection strings, or sensitive tokens. Always use `.env` via `pydantic-settings`.
+6. **NO Unilateral Contract Changes**: NEVER alter shared API endpoint paths, request/response schemas, or TypeScript types without explicit mutual agreement between Person 1 and Person 2.
+7. **NO Unauthorized Git Actions**: NEVER run `git commit`, `git push`, `git merge`, `git checkout`, or `git branch` without explicit user permission. Git state changes belong entirely to the human developers.
 
 ---
 
-## 2. Architectural Boundaries & Module Ownership
+## 2. Team Structure, File Ownership & Branching
+
+The project is developed by a two-person team working on separate Git branches:
+
+| Role | Primary Domain | Owned Paths | Responsibilities |
+|---|---|---|---|
+| **Person 1** | Backend & Database | `backend/`, `data/`, backend tests | FastAPI routes, MongoDB Atlas integration, ingestion, embeddings, `$vectorSearch`, timeline sorting, RAG generator, backend pytest suite. |
+| **Person 2** | Frontend & UI | `frontend/`, frontend tests | React + TypeScript + Vite app, timeline components, chat interface, citation chips, event drawer, local mock API integration. |
+| **Shared** | Architecture & Contracts | `spec.md`, `AGENTS.md`, `backlog.md` | Joint ownership. Modifying shared contracts requires agreement from both developers. |
+
+### Collaboration Rules:
+1. **Respect File Ownership**: Do not modify files owned by the other developer without explicit instruction. Never introduce sweeping refactors that touch both frontend and backend simultaneously.
+2. **Inspect Before Editing**: Agents MUST inspect and read existing code before proposing or making edits. Never generate replacements based on assumptions.
+3. **Parallel Frontend Development via Mocks**: Person 2 is decoupled from backend completion by utilizing mock responses conforming to `spec.md` (`frontend/src/mocks/`). Backend delays do not block frontend development.
+4. **Branch Isolation**: Each developer operates on their own feature branch. Branch switching, merging, and commits are strictly human-supervised.
 
 The codebase is organized into distinct, single-responsibility modules:
 
@@ -73,11 +89,15 @@ tests/                   # Pytest suite (unit, integration, retrieval evaluation
 ## 4. Definition of Done (DoD) for Any Task
 
 Before any feature, bugfix, or refactor is considered complete:
-1. **Tests pass**: Unit tests must run with `pytest tests/` and exit with 0 errors.
-2. **Deterministic timeline guaranteed**: A test must verify that events are always ordered chronologically regardless of ingestion order.
-3. **Citation verification covered**: A test must verify that hallucinated citation IDs in mock LLM outputs are flagged or stripped.
-4. **No regressions in evaluation cases**: The retrieval evaluation suite (`tests/test_retrieval_eval.py`) must pass with expected source IDs found in top-K results.
-5. **No secret leakage**: Run `git status` / `git diff` to confirm `.env` is never tracked.
+1. **Existing Code Inspected**: Existing files and surrounding logic must be reviewed before applying edits.
+2. **Relevant Tests Pass**:
+   - Backend tasks: Unit and integration tests must run with `pytest tests/` and exit with 0 errors.
+   - Frontend tasks: Typecheck (`npm run build` or `npx tsc`) and component tests pass without errors.
+3. **Deterministic Timeline Guaranteed**: For backend changes, tests must verify that events remain ordered strictly chronologically regardless of ingestion sequence.
+4. **Citation Verification Covered**: For generator changes, tests must verify that hallucinated citation IDs in LLM outputs are detected and rejected.
+5. **No Regressions in Evaluation Cases**: The retrieval evaluation benchmark (`tests/test_retrieval_eval.py`) must pass with expected source IDs found in top-K results.
+6. **No Secret Leakage**: Confirm `.env` or sensitive credentials are never tracked or committed.
+7. **Post-Task Summary Provided**: The contributor or agent MUST provide an explicit summary of all modified/created files, detailing the exact nature of the change and any open decisions requiring user review.
 
 ---
 
