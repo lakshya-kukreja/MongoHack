@@ -1,0 +1,366 @@
+[
+  {
+    "source_id": "DEPLOY-001",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T13:40:00Z",
+    "source_type": "deployment_log",
+    "author_or_actor": "marcus.eng",
+    "channel_or_service": "checkout-api",
+    "summary": "Deployment of checkout-api v2.4.1 (commit a9f3c2) to prod-us-east-1",
+    "raw_content": "[2026-10-25 09:40:00 EDT] [INFO] [deploy-runner] Service: checkout-api | Action: deploy | Commit: a9f3c2 | Deployer: marcus.eng | Status: SUCCESS | Target: v2.4.1 | Replaced 16 pods | Notes: Connection pool & redis client update",
+    "structured_payload": {
+      "service": "checkout-api",
+      "action": "deploy",
+      "commit": "a9f3c2",
+      "deployer": "marcus.eng",
+      "version": "v2.4.1",
+      "environment": "production",
+      "cluster": "prod-us-east-1",
+      "raw_ref": "deploy_log.txt:L7"
+    },
+    "embedding_text": "[DEPLOYMENT] [2026-10-25T13:40:00Z] checkout-api (marcus.eng): Deploy commit a9f3c2 v2.4.1 to prod-us-east-1. Notes: Connection pool & redis client update.",
+    "tags": ["deployment", "checkout-api", "v2.4.1", "a9f3c2"]
+  },
+  {
+    "source_id": "SLACK-001",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T13:40:20Z",
+    "source_type": "slack",
+    "author_or_actor": "marcus.eng",
+    "channel_or_service": "#checkout-eng",
+    "summary": "Marcus announces deployment of v2.4.1 (commit a9f3c2)",
+    "raw_content": "Heads up team, deploying checkout-api v2.4.1 (commit a9f3c2) to prod-us-east-1 now. Changes include DB connection pooling tune and redis caching.",
+    "structured_payload": {
+      "channel": "#checkout-eng",
+      "user": "marcus.eng",
+      "ts": "1792935620.000100",
+      "raw_ref": "chat_export.json:1792935620.000100"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T13:40:20Z] #checkout-eng (marcus.eng): Heads up team, deploying checkout-api v2.4.1 (commit a9f3c2) to prod-us-east-1 now. Changes include DB connection pooling tune and redis caching.",
+    "tags": ["slack", "checkout-api", "deploy-announcement"]
+  },
+  {
+    "source_id": "SLACK-002",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:02:10Z",
+    "source_type": "slack",
+    "author_or_actor": "alice.dev",
+    "channel_or_service": "#checkout-eng",
+    "summary": "Alice notices checkout funnel latency creeping up",
+    "raw_content": "Is anyone seeing latency creeping up on the checkout funnel? Grafana P99 curve looks steep.",
+    "structured_payload": {
+      "channel": "#checkout-eng",
+      "user": "alice.dev",
+      "ts": "1792936930.000600",
+      "raw_ref": "chat_export.json:1792936930.000600"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:02:10Z] #checkout-eng (alice.dev): Is anyone seeing latency creeping up on the checkout funnel? Grafana P99 curve looks steep.",
+    "tags": ["slack", "anomaly", "latency-observation"]
+  },
+  {
+    "source_id": "SLACK-003",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:03:00Z",
+    "source_type": "slack",
+    "author_or_actor": "alice.dev",
+    "channel_or_service": "#checkout-eng",
+    "summary": "Alice asserts latency surge began around 14:02 UTC",
+    "raw_content": "Checking the telemetry metrics now... looking at the graphs, it started at 14:02 UTC when latency began climbing.",
+    "structured_payload": {
+      "channel": "#checkout-eng",
+      "user": "alice.dev",
+      "ts": "1792936980.000700",
+      "claim_start": "14:02:00Z",
+      "conflict_note": "Claims issue began at 14:02 UTC, whereas Alert 4471 fired at 14:07 UTC",
+      "raw_ref": "chat_export.json:1792936980.000700"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:03:00Z] #checkout-eng (alice.dev): Checking the telemetry metrics now... looking at the graphs, it started at 14:02 UTC when latency began climbing.",
+    "tags": ["slack", "latency-start-claim", "conflict-source"]
+  },
+  {
+    "source_id": "SLACK-004",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:04:15Z",
+    "source_type": "slack",
+    "author_or_actor": "priya.dev",
+    "channel_or_service": "#checkout-eng",
+    "summary": "Priya notes inventory-sync queue piling up calling checkout-api",
+    "raw_content": "Hey team, inventory-sync is buffering orders and queue is piling up unexpectedly. Seeing high response times calling checkout-api.",
+    "structured_payload": {
+      "channel": "#checkout-eng",
+      "user": "priya.dev",
+      "ts": "1792937055.000800",
+      "gap_note": "No alert fired for inventory-sync before this complaint; alert 4476 fired later at 14:16:00 UTC",
+      "raw_ref": "chat_export.json:1792937055.000800"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:04:15Z] #checkout-eng (priya.dev): Hey team, inventory-sync is buffering orders and queue is piling up unexpectedly. Seeing high response times calling checkout-api.",
+    "tags": ["slack", "inventory-sync", "unalerted-gap"]
+  },
+  {
+    "source_id": "ALERT-4471",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:07:00Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "datadog-monitor",
+    "channel_or_service": "checkout-api",
+    "summary": "CRITICAL: Alert 4471 checkout-api P99 latency breach: 2840ms exceeds 2000ms threshold (Error code: E4)",
+    "raw_content": "CRITICAL: checkout-api P99 latency breach: 2840ms exceeds 2000ms threshold on /api/v1/checkout. Error code: E4. Fired at 2026-10-25T19:37:00+05:30.",
+    "structured_payload": {
+      "alert_id": "4471",
+      "service": "checkout-api",
+      "severity": "CRITICAL",
+      "error_code": "E4",
+      "measured_p99_ms": 2840,
+      "threshold_ms": 2000,
+      "fired_at_raw": "2026-10-25T19:37:00+05:30",
+      "raw_ref": "alerts.json:4471"
+    },
+    "embedding_text": "[ALERT] [2026-10-25T14:07:00Z] checkout-api (datadog-monitor): CRITICAL Alert 4471 Error code E4. checkout-api P99 latency breach: 2840ms exceeds 2000ms threshold on /api/v1/checkout.",
+    "tags": ["alert", "checkout-api", "CRITICAL", "E4", "4471"]
+  },
+  {
+    "source_id": "ALERT-4472",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:08:30Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "datadog-monitor",
+    "channel_or_service": "checkout-api",
+    "summary": "CRITICAL: Alert 4472 HTTP 504 Gateway Timeout rate spiked to 14.8%",
+    "raw_content": "HTTP 504 Gateway Timeout rate spiked to 14.8% on checkout-api downstream dependencies. Error code: E4. Fired at 2026-10-25T19:38:30+05:30.",
+    "structured_payload": {
+      "alert_id": "4472",
+      "service": "checkout-api",
+      "severity": "CRITICAL",
+      "error_code": "E4",
+      "timeout_rate_pct": 14.8,
+      "fired_at_raw": "2026-10-25T19:38:30+05:30",
+      "raw_ref": "alerts.json:4472"
+    },
+    "embedding_text": "[ALERT] [2026-10-25T14:08:30Z] checkout-api (datadog-monitor): CRITICAL Alert 4472 Error code E4. HTTP 504 Gateway Timeout rate spiked to 14.8% on checkout-api.",
+    "tags": ["alert", "checkout-api", "CRITICAL", "E4", "4472"]
+  },
+  {
+    "source_id": "SLACK-005",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:09:00Z",
+    "source_type": "slack",
+    "author_or_actor": "bob.lead",
+    "channel_or_service": "#incidents",
+    "summary": "Bob requests Sarah to acknowledge alert 4471 and take IC",
+    "raw_content": "Seeing alert 4471. @sarah.triage can you please acknowledge alert 4471 and take Incident Commander?",
+    "structured_payload": {
+      "channel": "#incidents",
+      "user": "bob.lead",
+      "mentioned_user": "sarah.triage",
+      "actor_trap": "sarah.triage is mentioned, but dave.ops actually acts and acknowledges",
+      "ts": "1792937340.001200",
+      "raw_ref": "chat_export.json:1792937340.001200"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:09:00Z] #incidents (bob.lead): Seeing alert 4471. @sarah.triage can you please acknowledge alert 4471 and take Incident Commander?",
+    "tags": ["slack", "actor-trap", "delegation"]
+  },
+  {
+    "source_id": "SLACK-006",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:09:45Z",
+    "source_type": "slack",
+    "author_or_actor": "dave.ops",
+    "channel_or_service": "#incidents",
+    "summary": "Dave acknowledges alert 4471 and assumes Incident Commander role",
+    "raw_content": "Sarah is currently in an offsite meeting. I am stepping in and acknowledging alert 4471 now. I will act as Incident Commander for this SEV-1.",
+    "structured_payload": {
+      "channel": "#incidents",
+      "user": "dave.ops",
+      "role": "Incident Commander",
+      "acknowledged_alert": "4471",
+      "actual_actor": "dave.ops",
+      "ts": "1792937385.001300",
+      "raw_ref": "chat_export.json:1792937385.001300"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:09:45Z] #incidents (dave.ops): Sarah is currently in an offsite meeting. I am stepping in and acknowledging alert 4471 now. I will act as Incident Commander for this SEV-1.",
+    "tags": ["slack", "acknowledgement", "incident-commander", "dave.ops"]
+  },
+  {
+    "source_id": "SLACK-007",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:13:00Z",
+    "source_type": "slack",
+    "author_or_actor": "bob.lead",
+    "channel_or_service": "#incidents",
+    "summary": "Bob asks if a database migration was deployed",
+    "raw_content": "Who deployed the database migration? Did someone run schema updates on postgres right before the incident?",
+    "structured_payload": {
+      "channel": "#incidents",
+      "user": "bob.lead",
+      "ts": "1792937580.001800",
+      "gap_inquiry": "Database migration inquiry (no such record exists)",
+      "raw_ref": "chat_export.json:1792937580.001800"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:13:00Z] #incidents (bob.lead): Who deployed the database migration? Did someone run schema updates on postgres right before the incident?",
+    "tags": ["slack", "database-migration", "unanswerable-gap"]
+  },
+  {
+    "source_id": "SLACK-008",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:14:00Z",
+    "source_type": "slack",
+    "author_or_actor": "jason.ops",
+    "channel_or_service": "#incidents",
+    "summary": "Jason confirms no database migration was deployed",
+    "raw_content": "Checking our CI/CD audit logs and deploy records: no database migration was deployed today. Only service code updates.",
+    "structured_payload": {
+      "channel": "#incidents",
+      "user": "jason.ops",
+      "ts": "1792937640.001900",
+      "gap_resolution": "Confirmed absence of database migration",
+      "raw_ref": "chat_export.json:1792937640.001900"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:14:00Z] #incidents (jason.ops): Checking our CI/CD audit logs and deploy records: no database migration was deployed today. Only service code updates.",
+    "tags": ["slack", "audit", "no-migration-confirmed"]
+  },
+  {
+    "source_id": "SLACK-009",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:15:50Z",
+    "source_type": "slack",
+    "author_or_actor": "marcus.eng",
+    "channel_or_service": "#checkout-eng",
+    "summary": "Marcus shares debug curl command containing test token",
+    "raw_content": "Run this probe command: curl -s -H \"Authorization: Bearer [REDACTED_SECRET]\" https://checkout-api.internal/debug/pool/status",
+    "structured_payload": {
+      "channel": "#checkout-eng",
+      "user": "marcus.eng",
+      "ts": "1792937750.002300",
+      "secret_test": "Contained fake token xoxb-FAKE-0000-TEST before redaction",
+      "raw_ref": "chat_export.json:1792937750.002300"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:15:50Z] #checkout-eng (marcus.eng): Run this probe command: curl -s -H \"Authorization: Bearer [REDACTED_SECRET]\" https://checkout-api.internal/debug/pool/status",
+    "tags": ["slack", "debug-probe", "redacted-secret"]
+  },
+  {
+    "source_id": "SLACK-010",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:16:50Z",
+    "source_type": "slack",
+    "author_or_actor": "elena.dev",
+    "channel_or_service": "#checkout-eng",
+    "summary": "Elena confirms connection pool exhaustion under commit a9f3c2",
+    "raw_content": "Output: active_connections: 64/64, queued_requests: 189, pool_exhausted: true. The new pool limit in commit a9f3c2 is choking under peak traffic.",
+    "structured_payload": {
+      "channel": "#checkout-eng",
+      "user": "elena.dev",
+      "commit": "a9f3c2",
+      "active_connections": "64/64",
+      "queued_requests": 189,
+      "ts": "1792937810.002400",
+      "raw_ref": "chat_export.json:1792937810.002400"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:16:50Z] #checkout-eng (elena.dev): Output: active_connections: 64/64, queued_requests: 189, pool_exhausted: true. The new pool limit in commit a9f3c2 is choking under peak traffic.",
+    "tags": ["slack", "root-cause-evidence", "pool-exhaustion", "a9f3c2"]
+  },
+  {
+    "source_id": "ALERT-4476",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:16:00Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "datadog-monitor",
+    "channel_or_service": "inventory-sync",
+    "summary": "HIGH: Alert 4476 Inventory-sync consumer group lag exceeded 10,000 messages",
+    "raw_content": "Inventory-sync consumer group lag exceeded 10,000 messages (current: 14,210). Fired at 2026-10-25T19:46:00+05:30.",
+    "structured_payload": {
+      "alert_id": "4476",
+      "service": "inventory-sync",
+      "severity": "HIGH",
+      "lag_count": 14210,
+      "fired_at_raw": "2026-10-25T19:46:00+05:30",
+      "raw_ref": "alerts.json:4476"
+    },
+    "embedding_text": "[ALERT] [2026-10-25T14:16:00Z] inventory-sync (datadog-monitor): HIGH Alert 4476. Inventory-sync consumer group lag exceeded 10,000 messages (current: 14,210).",
+    "tags": ["alert", "inventory-sync", "HIGH", "4476"]
+  },
+  {
+    "source_id": "SLACK-011",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:22:30Z",
+    "source_type": "slack",
+    "author_or_actor": "dave.ops",
+    "channel_or_service": "#incidents",
+    "summary": "Dave directs Marcus to rollback commit a9f3c2",
+    "raw_content": "We need an immediate rollback. @marcus.eng please rollback checkout-api to v2.4.0 (reverting a9f3c2).",
+    "structured_payload": {
+      "channel": "#incidents",
+      "user": "dave.ops",
+      "target_service": "checkout-api",
+      "reverted_commit": "a9f3c2",
+      "actor_trap": "marcus.eng is asked to rollback, but elena.dev actually triggers it",
+      "ts": "1792938150.003000",
+      "raw_ref": "chat_export.json:1792938150.003000"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:22:30Z] #incidents (dave.ops): We need an immediate rollback. @marcus.eng please rollback checkout-api to v2.4.0 (reverting a9f3c2).",
+    "tags": ["slack", "rollback-order", "actor-trap"]
+  },
+  {
+    "source_id": "SLACK-012",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:23:10Z",
+    "source_type": "slack",
+    "author_or_actor": "elena.dev",
+    "channel_or_service": "#incidents",
+    "summary": "Elena executes the rollback of a9f3c2 (commit 7b1e4a)",
+    "raw_content": "Marcus is reviewing the core dump on server 4. I am executing the rollback of a9f3c2 right now via deploy runner (commit 7b1e4a).",
+    "structured_payload": {
+      "channel": "#incidents",
+      "user": "elena.dev",
+      "actual_actor": "elena.dev",
+      "rollback_commit": "7b1e4a",
+      "reverted_commit": "a9f3c2",
+      "ts": "1792938190.003100",
+      "raw_ref": "chat_export.json:1792938190.003100"
+    },
+    "embedding_text": "[SLACK] [2026-10-25T14:23:10Z] #incidents (elena.dev): Marcus is reviewing the core dump on server 4. I am executing the rollback of a9f3c2 right now via deploy runner (commit 7b1e4a).",
+    "tags": ["slack", "rollback-execution", "elena.dev", "7b1e4a"]
+  },
+  {
+    "source_id": "DEPLOY-002",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:28:10Z",
+    "source_type": "deployment_log",
+    "author_or_actor": "elena.dev",
+    "channel_or_service": "checkout-api",
+    "summary": "Rollback deployment of checkout-api to v2.4.0 (commit 7b1e4a reverting a9f3c2)",
+    "raw_content": "[2026-10-25 10:28:10 EDT] [INFO] [deploy-runner] Service: checkout-api | Action: rollback | Commit: 7b1e4a | Deployer: elena.dev | Status: IN_PROGRESS | Rolling back to v2.4.0 (reverting a9f3c2)",
+    "structured_payload": {
+      "service": "checkout-api",
+      "action": "rollback",
+      "commit": "7b1e4a",
+      "reverted_commit": "a9f3c2",
+      "deployer": "elena.dev",
+      "version": "v2.4.0",
+      "cluster": "prod-us-east-1",
+      "raw_ref": "deploy_log.txt:L11"
+    },
+    "embedding_text": "[DEPLOYMENT] [2026-10-25T14:28:10Z] checkout-api (elena.dev): Rollback commit 7b1e4a to v2.4.0 reverting a9f3c2 on checkout-api.",
+    "tags": ["deployment", "rollback", "checkout-api", "7b1e4a", "v2.4.0"]
+  },
+  {
+    "source_id": "ALERT-4478",
+    "incident_id": "INC-2026-001",
+    "timestamp": "2026-10-25T14:32:15Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "datadog-monitor",
+    "channel_or_service": "checkout-api",
+    "summary": "RESOLVED: Alert 4478 checkout-api P99 latency returned to normal: 112ms",
+    "raw_content": "RESOLVED: checkout-api P99 latency returned to normal: 112ms (threshold: 2000ms). Fired at 2026-10-25T20:02:15+05:30.",
+    "structured_payload": {
+      "alert_id": "4478",
+      "service": "checkout-api",
+      "severity": "INFO",
+      "status": "RESOLVED",
+      "p99_latency_ms": 112,
+      "fired_at_raw": "2026-10-25T20:02:15+05:30",
+      "raw_ref": "alerts.json:4478"
+    },
+    "embedding_text": "[ALERT] [2026-10-25T14:32:15Z] checkout-api (datadog-monitor): RESOLVED Alert 4478 checkout-api P99 latency returned to normal: 112ms.",
+    "tags": ["alert", "recovery", "checkout-api", "RESOLVED", "4478"]
+  }
+]

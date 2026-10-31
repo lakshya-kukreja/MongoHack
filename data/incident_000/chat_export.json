@@ -1,0 +1,58 @@
+[
+  {
+    "channel": "#incidents",
+    "user": "alice.dev",
+    "text": "Anyone seeing checkout-api latency climbing? Grafana looks like a sudden P99 spike.",
+    "ts": "1789226500.000100",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "ALERT [3102] [CRITICAL] [E4] checkout-api P99 latency breach: 3100ms exceeds 2000ms threshold",
+    "ts": "1789226700.000200",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "kevin.ops",
+    "text": "Acknowledging alert 3102. Checking recent deployment of commit b3c891e (v2.3.9).",
+    "ts": "1789226760.000300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "bob.lead",
+    "text": "Was there any database migration executed with this deploy?",
+    "ts": "1789226820.000400",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "kevin.ops",
+    "text": "No database migration, just a driver version bump. But connection pool is timing out on socket read.",
+    "ts": "1789226900.000500",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "kevin.ops",
+    "text": "Rolling back checkout-api to v2.3.8 (commit f1092a4) immediately.",
+    "ts": "1789227100.000600",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "RESOLVED: ALERT [3110] [INFO] checkout-api P99 latency returned to baseline: 98ms",
+    "ts": "1789229100.000700",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "kevin.ops",
+    "text": "Rollback confirmed effective. Closing INC-2026-000 from September 12.",
+    "ts": "1789229200.000800",
+    "type": "message"
+  }
+]

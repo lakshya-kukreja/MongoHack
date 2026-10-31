@@ -1,0 +1,650 @@
+{
+  "incident_id": "INC-2026-001",
+  "title": "checkout-api P99 Latency Surge & Connection Pool Exhaustion after Deploy",
+  "first_anomaly": {
+    "chat_observed_time_utc": "2026-10-25T14:02:10Z",
+    "chat_observer": "alice.dev",
+    "chat_claim_start_time_utc": "2026-10-25T14:02:00Z",
+    "first_system_alert_id": "4471",
+    "first_system_alert_time_utc": "2026-10-25T14:07:00Z",
+    "conflict_detected": true,
+    "conflict_explanation": "Chat observation by alice.dev claims degradation began at 14:02:00 UTC, while automated monitoring alert 4471 fired 5 minutes later at 14:07:00 UTC (19:37:00+05:30)."
+  },
+  "first_human_acknowledgement": {
+    "actor": "dave.ops",
+    "time_utc": "2026-10-25T14:09:45Z",
+    "channel": "#incidents",
+    "slack_ts": "1792937385.001300",
+    "actor_trap_note": "bob.lead @mentioned sarah.triage asking her to acknowledge alert 4471, but Sarah was unavailable; dave.ops stepped in, acknowledged alert 4471, and took over as Incident Commander."
+  },
+  "preceding_deployment": {
+    "service": "checkout-api",
+    "version": "v2.4.1",
+    "commit_sha": "a9f3c2",
+    "deployer": "marcus.eng",
+    "time_utc": "2026-10-25T13:40:00Z",
+    "server_local_time": "2026-10-25 09:40:00 EDT",
+    "timezone": "America/New_York (EDT, UTC-04:00)",
+    "description": "Connection pool & redis client update on checkout-api"
+  },
+  "rollback_deployment": {
+    "service": "checkout-api",
+    "version": "v2.4.0",
+    "commit_sha": "7b1e4a",
+    "target_reverted_commit": "a9f3c2",
+    "requested_actor": "marcus.eng",
+    "actual_deployer": "elena.dev",
+    "time_utc": "2026-10-25T14:28:10Z",
+    "server_local_time": "2026-10-25 10:28:10 EDT",
+    "actor_trap_note": "dave.ops instructed @marcus.eng to rollback, but elena.dev executed the rollback while Marcus was debugging."
+  },
+  "deliberate_traps_and_gaps": {
+    "conflict_trap": {
+      "chat_timestamp_claim": "14:02:00Z",
+      "alert_4471_timestamp": "14:07:00Z (2026-10-25T19:37:00+05:30)",
+      "discrepancy_minutes": 5
+    },
+    "timezone_mix": {
+      "chat_format": "Unix epoch seconds string (e.g. 1792935620.000100)",
+      "alert_format": "ISO-8601 with offset (e.g. +05:30, +00:00, -04:00)",
+      "deploy_format": "Server local time in America/New_York (EDT, UTC-04:00)",
+      "naive_sort_failure": "Naive string sort orders EDT morning (09:40:00 EDT) after epoch or IST timestamps incorrectly."
+    },
+    "exact_identifiers": {
+      "alert_id": "4471",
+      "commit_sha": "a9f3c2",
+      "error_code": "E4",
+      "service": "checkout-api"
+    },
+    "actor_traps": [
+      {
+        "mentioned": "sarah.triage",
+        "actual_actor": "dave.ops",
+        "action": "acknowledge_alert_and_ic"
+      },
+      {
+        "mentioned": "marcus.eng",
+        "actual_actor": "elena.dev",
+        "action": "trigger_rollback"
+      }
+    ],
+    "no_answer_gaps": [
+      {
+        "question": "Who deployed the database migration?",
+        "ground_truth": "DECLINE / REFUSE: No database migration was deployed. Neither deploy_log.txt nor chat records substantiate any database migration."
+      },
+      {
+        "question": "Which alert fired before the inventory-sync issue was reported in chat?",
+        "ground_truth": "DECLINE / REFUSE: No alert fired before the first chat complaint (priya.dev at 14:04:15Z). Alert 4476 for inventory-sync did not trigger until 14:16:00Z."
+      }
+    ],
+    "secret_redaction": {
+      "token_pattern": "xoxb-FAKE-0000-TEST",
+      "location": "chat_export.json message 1792937750.002300"
+    },
+    "incomplete_export_gap": {
+      "location": "chat_export.json thread 1792937710.002100",
+      "missing_ids": ["thread-pool-msg-4", "thread-pool-msg-5"]
+    }
+  },
+  "expected_event_order_utc": [
+    {
+      "order": 1,
+      "timestamp_utc": "2026-10-25T13:15:22Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L6",
+      "actor": "jason.ops",
+      "service": "notification-worker",
+      "summary": "Deploy commit c4f810b on notification-worker"
+    },
+    {
+      "order": 2,
+      "timestamp_utc": "2026-10-25T13:40:00Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L7",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "Deploy commit a9f3c2 (v2.4.1) on checkout-api"
+    },
+    {
+      "order": 3,
+      "timestamp_utc": "2026-10-25T13:40:20Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792935620.000100",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng announces v2.4.1 deploy to prod-us-east-1"
+    },
+    {
+      "order": 4,
+      "timestamp_utc": "2026-10-25T13:41:20Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792935680.000200",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "elena.dev offers eyes on canary pods"
+    },
+    {
+      "order": 5,
+      "timestamp_utc": "2026-10-25T13:42:15Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L8",
+      "actor": "k8s-controller",
+      "service": "checkout-api",
+      "summary": "checkout-api 16/16 pods rollout ready"
+    },
+    {
+      "order": 6,
+      "timestamp_utc": "2026-10-25T13:42:20Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792935740.000300",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng reports canary clean, rolling to all 16 pods"
+    },
+    {
+      "order": 7,
+      "timestamp_utc": "2026-10-25T13:43:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792935780.000400",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng confirms rollout complete at 09:42 EDT"
+    },
+    {
+      "order": 8,
+      "timestamp_utc": "2026-10-25T13:48:00Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4468",
+      "actor": "datadog-monitor",
+      "service": "notification-worker",
+      "summary": "Notification queue lag exceeded 15s"
+    },
+    {
+      "order": 9,
+      "timestamp_utc": "2026-10-25T13:55:00Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L9",
+      "actor": "priya.dev",
+      "service": "cart-service",
+      "summary": "ConfigMap cart-rate-limits updated (commit e8812c1)"
+    },
+    {
+      "order": 10,
+      "timestamp_utc": "2026-10-25T13:55:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792936500.000500",
+      "actor": "priya.dev",
+      "service": "cart-service",
+      "summary": "priya.dev confirms cart-service config reload"
+    },
+    {
+      "order": 11,
+      "timestamp_utc": "2026-10-25T14:02:10Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792936930.000600",
+      "actor": "alice.dev",
+      "service": "checkout-api",
+      "summary": "alice.dev spots latency creeping up on checkout funnel"
+    },
+    {
+      "order": 12,
+      "timestamp_utc": "2026-10-25T14:03:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792936980.000700",
+      "actor": "alice.dev",
+      "service": "checkout-api",
+      "summary": "alice.dev asserts latency began climbing at 14:02 UTC"
+    },
+    {
+      "order": 13,
+      "timestamp_utc": "2026-10-25T14:04:15Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937055.000800",
+      "actor": "priya.dev",
+      "service": "inventory-sync",
+      "summary": "priya.dev notes inventory-sync buffer piling up"
+    },
+    {
+      "order": 14,
+      "timestamp_utc": "2026-10-25T14:05:20Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937120.000900",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng checks if alert has fired"
+    },
+    {
+      "order": 15,
+      "timestamp_utc": "2026-10-25T14:07:00Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4471",
+      "actor": "datadog-monitor",
+      "service": "checkout-api",
+      "summary": "CRITICAL: Alert 4471 checkout-api P99 latency breach: 2840ms (Error code: E4)"
+    },
+    {
+      "order": 16,
+      "timestamp_utc": "2026-10-25T14:07:05Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937225.001000",
+      "actor": "datadog-bot",
+      "service": "checkout-api",
+      "summary": "datadog-bot relays Alert 4471 [CRITICAL] [E4] in #incidents"
+    },
+    {
+      "order": 17,
+      "timestamp_utc": "2026-10-25T14:08:30Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4472",
+      "actor": "datadog-monitor",
+      "service": "checkout-api",
+      "summary": "CRITICAL: Alert 4472 HTTP 504 Gateway Timeout rate spiked to 14.8%"
+    },
+    {
+      "order": 18,
+      "timestamp_utc": "2026-10-25T14:08:30Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937310.001100",
+      "actor": "datadog-bot",
+      "service": "checkout-api",
+      "summary": "datadog-bot relays Alert 4472 in #incidents"
+    },
+    {
+      "order": 19,
+      "timestamp_utc": "2026-10-25T14:09:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937340.001200",
+      "actor": "bob.lead",
+      "service": "checkout-api",
+      "summary": "bob.lead asks @sarah.triage to ack alert 4471 and take IC"
+    },
+    {
+      "order": 20,
+      "timestamp_utc": "2026-10-25T14:09:45Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937385.001300",
+      "actor": "dave.ops",
+      "service": "checkout-api",
+      "summary": "dave.ops acknowledges alert 4471 and assumes Incident Commander"
+    },
+    {
+      "order": 21,
+      "timestamp_utc": "2026-10-25T14:10:15Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4473",
+      "actor": "datadog-monitor",
+      "service": "payment-gateway",
+      "summary": "HIGH: Alert 4473 Connection pool utilization at 94%"
+    },
+    {
+      "order": 22,
+      "timestamp_utc": "2026-10-25T14:10:20Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937420.001400",
+      "actor": "dave.ops",
+      "service": "checkout-api",
+      "summary": "dave.ops declares SEV-1 incident INC-2026-001"
+    },
+    {
+      "order": 23,
+      "timestamp_utc": "2026-10-25T14:11:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937460.001500",
+      "actor": "alice.dev",
+      "service": "checkout-api",
+      "summary": "alice.dev confirms latency began ~14:02 UTC vs alert at 14:07 UTC"
+    },
+    {
+      "order": 24,
+      "timestamp_utc": "2026-10-25T14:11:30Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937490.001600",
+      "actor": "dave.ops",
+      "service": "checkout-api",
+      "summary": "dave.ops inquires about recent deployments"
+    },
+    {
+      "order": 25,
+      "timestamp_utc": "2026-10-25T14:12:00Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4474",
+      "actor": "datadog-monitor",
+      "service": "checkout-api",
+      "summary": "HIGH: Alert 4474 Redis cache connection pool exhausted"
+    },
+    {
+      "order": 26,
+      "timestamp_utc": "2026-10-25T14:12:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937520.002700",
+      "actor": "datadog-bot",
+      "service": "checkout-api",
+      "summary": "datadog-bot posts Alert 4474 redis pool exhaustion"
+    },
+    {
+      "order": 27,
+      "timestamp_utc": "2026-10-25T14:12:10Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937530.001700",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng identifies v2.4.1 (commit a9f3c2) deployed at 09:40 EDT (~13:40 UTC)"
+    },
+    {
+      "order": 28,
+      "timestamp_utc": "2026-10-25T14:13:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937580.001800",
+      "actor": "bob.lead",
+      "service": "checkout-api",
+      "summary": "bob.lead asks who deployed the database migration"
+    },
+    {
+      "order": 29,
+      "timestamp_utc": "2026-10-25T14:14:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937640.001900",
+      "actor": "jason.ops",
+      "service": "checkout-api",
+      "summary": "jason.ops confirms NO database migration was deployed"
+    },
+    {
+      "order": 30,
+      "timestamp_utc": "2026-10-25T14:14:30Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937670.002000",
+      "actor": "priya.dev",
+      "service": "checkout-api",
+      "summary": "priya.dev confirms no DB migrations or DDL executed"
+    },
+    {
+      "order": 31,
+      "timestamp_utc": "2026-10-25T14:14:30Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4475",
+      "actor": "datadog-monitor",
+      "service": "cart-service",
+      "summary": "MEDIUM: Alert 4475 Cart abandonment rate jumped 32%"
+    },
+    {
+      "order": 32,
+      "timestamp_utc": "2026-10-25T14:15:10Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937710.002100",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "elena.dev starts pool inspection thread"
+    },
+    {
+      "order": 33,
+      "timestamp_utc": "2026-10-25T14:15:30Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937730.002200",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng shares debug endpoint"
+    },
+    {
+      "order": 34,
+      "timestamp_utc": "2026-10-25T14:15:50Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937750.002300",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng provides curl with test token (xoxb-FAKE-0000-TEST)"
+    },
+    {
+      "order": 35,
+      "timestamp_utc": "2026-10-25T14:16:00Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4476",
+      "actor": "datadog-monitor",
+      "service": "inventory-sync",
+      "summary": "HIGH: Alert 4476 Inventory-sync consumer group lag > 10k"
+    },
+    {
+      "order": 36,
+      "timestamp_utc": "2026-10-25T14:16:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937760.002800",
+      "actor": "datadog-bot",
+      "service": "inventory-sync",
+      "summary": "datadog-bot relays Alert 4476 in #incidents"
+    },
+    {
+      "order": 37,
+      "timestamp_utc": "2026-10-25T14:16:50Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937810.002400",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "elena.dev shows pool status: 64/64 active, 189 queued"
+    },
+    {
+      "order": 38,
+      "timestamp_utc": "2026-10-25T14:18:40Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L10",
+      "actor": "deploy-runner",
+      "service": "payment-webhook",
+      "summary": "Healthcheck probe on payment-webhook: latency 1420ms"
+    },
+    {
+      "order": 39,
+      "timestamp_utc": "2026-10-25T14:18:40Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937920.002500",
+      "actor": "alice.dev",
+      "service": "checkout-api",
+      "summary": "alice.dev links redis timeout in v2.4.1 to Error code E4"
+    },
+    {
+      "order": 40,
+      "timestamp_utc": "2026-10-25T14:19:20Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792937960.002600",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "elena.dev pinpoints commit a9f3c2 as culprit"
+    },
+    {
+      "order": 41,
+      "timestamp_utc": "2026-10-25T14:20:00Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4477",
+      "actor": "datadog-monitor",
+      "service": "checkout-api",
+      "summary": "CRITICAL: Alert 4477 Error budget depletion 18x normal"
+    },
+    {
+      "order": 42,
+      "timestamp_utc": "2026-10-25T14:21:40Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938100.002900",
+      "actor": "dave.ops",
+      "service": "checkout-api",
+      "summary": "dave.ops confirms root cause is connection pool in commit a9f3c2"
+    },
+    {
+      "order": 43,
+      "timestamp_utc": "2026-10-25T14:22:30Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938150.003000",
+      "actor": "dave.ops",
+      "service": "checkout-api",
+      "summary": "dave.ops directs @marcus.eng to rollback commit a9f3c2"
+    },
+    {
+      "order": 44,
+      "timestamp_utc": "2026-10-25T14:23:10Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938190.003100",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "elena.dev executes rollback commit 7b1e4a while Marcus is busy"
+    },
+    {
+      "order": 45,
+      "timestamp_utc": "2026-10-25T14:23:40Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938220.003200",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "elena.dev announces rollback to v2.4.0 in progress"
+    },
+    {
+      "order": 46,
+      "timestamp_utc": "2026-10-25T14:26:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938360.003300",
+      "actor": "priya.dev",
+      "service": "checkout-api",
+      "summary": "priya.dev notes canary pods on v2.4.0 coming up"
+    },
+    {
+      "order": 47,
+      "timestamp_utc": "2026-10-25T14:27:30Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938450.003400",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng confirms 16 pods running v2.4.0, queue down to 0"
+    },
+    {
+      "order": 48,
+      "timestamp_utc": "2026-10-25T14:28:10Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L11",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "Rollback to v2.4.0 (commit 7b1e4a) initiated by elena.dev"
+    },
+    {
+      "order": 49,
+      "timestamp_utc": "2026-10-25T14:28:20Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938500.003500",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "elena.dev confirms checkout-api P99 latency dropped to 112ms"
+    },
+    {
+      "order": 50,
+      "timestamp_utc": "2026-10-25T14:30:05Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L12",
+      "actor": "elena.dev",
+      "service": "checkout-api",
+      "summary": "Rollback commit 7b1e4a completed (16 pods replaced)"
+    },
+    {
+      "order": 51,
+      "timestamp_utc": "2026-10-25T14:32:00Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L13",
+      "actor": "k8s-controller",
+      "service": "checkout-api",
+      "summary": "checkout-api v2.4.0 all 16 pods healthy and previous revision terminated"
+    },
+    {
+      "order": 52,
+      "timestamp_utc": "2026-10-25T14:32:15Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4478",
+      "actor": "datadog-monitor",
+      "service": "checkout-api",
+      "summary": "INFO: Alert 4478 P99 latency normalized to 112ms (RESOLVED)"
+    },
+    {
+      "order": 53,
+      "timestamp_utc": "2026-10-25T14:32:15Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938735.003600",
+      "actor": "datadog-bot",
+      "service": "checkout-api",
+      "summary": "datadog-bot relays Alert 4478 recovery in #incidents"
+    },
+    {
+      "order": 54,
+      "timestamp_utc": "2026-10-25T14:34:00Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4479",
+      "actor": "datadog-monitor",
+      "service": "payment-gateway",
+      "summary": "INFO: Alert 4479 Payment connection pool returned to baseline"
+    },
+    {
+      "order": 55,
+      "timestamp_utc": "2026-10-25T14:34:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938840.003700",
+      "actor": "datadog-bot",
+      "service": "payment-gateway",
+      "summary": "datadog-bot relays Alert 4479 recovery in #incidents"
+    },
+    {
+      "order": 56,
+      "timestamp_utc": "2026-10-25T14:34:40Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938880.003800",
+      "actor": "datadog-bot",
+      "service": "inventory-sync",
+      "summary": "datadog-bot relays Alert 4480 queue drained"
+    },
+    {
+      "order": 57,
+      "timestamp_utc": "2026-10-25T14:35:20Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938920.003900",
+      "actor": "alice.dev",
+      "service": "checkout-api",
+      "summary": "alice.dev reports conversions rebounded, E4 error rate 0.00%"
+    },
+    {
+      "order": 58,
+      "timestamp_utc": "2026-10-25T14:36:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792938960.004000",
+      "actor": "dave.ops",
+      "service": "checkout-api",
+      "summary": "dave.ops marks INC-2026-001 RESOLVED at 10:35 EDT (~14:35 UTC)"
+    },
+    {
+      "order": 59,
+      "timestamp_utc": "2026-10-25T14:37:00Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792939020.004100",
+      "actor": "bob.lead",
+      "service": "checkout-api",
+      "summary": "bob.lead reminds team to add load testing in staging"
+    },
+    {
+      "order": 60,
+      "timestamp_utc": "2026-10-25T14:37:40Z",
+      "source_type": "chat",
+      "source_ref": "chat_export.json:1792939060.004200",
+      "actor": "marcus.eng",
+      "service": "checkout-api",
+      "summary": "marcus.eng commits to writing post-mortem analysis"
+    },
+    {
+      "order": 61,
+      "timestamp_utc": "2026-10-25T14:38:00Z",
+      "source_type": "alert",
+      "source_ref": "alerts.json:4480",
+      "actor": "datadog-monitor",
+      "service": "inventory-sync",
+      "summary": "INFO: Alert 4480 Inventory queue drained to baseline"
+    },
+    {
+      "order": 62,
+      "timestamp_utc": "2026-10-25T14:45:00Z",
+      "source_type": "deploy",
+      "source_ref": "deploy_log.txt:L14",
+      "actor": "devops-bot",
+      "service": "telemetry-collector",
+      "summary": "Restart telemetry-collector"
+    }
+  ]
+}

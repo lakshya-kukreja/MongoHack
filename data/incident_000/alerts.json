@@ -1,0 +1,26 @@
+[
+  {
+    "alert_id": "3102",
+    "service": "checkout-api",
+    "severity": "CRITICAL",
+    "error_code": "E4",
+    "message": "checkout-api P99 latency breach: 3100ms exceeds 2000ms threshold on /api/v1/checkout",
+    "fired_at": "2026-09-12T15:25:00+00:00"
+  },
+  {
+    "alert_id": "3105",
+    "service": "checkout-api",
+    "severity": "CRITICAL",
+    "error_code": "E4",
+    "message": "checkout-api connection pool timeout waiting for database socket",
+    "fired_at": "2026-09-12T15:28:00+00:00"
+  },
+  {
+    "alert_id": "3110",
+    "service": "checkout-api",
+    "severity": "INFO",
+    "error_code": "RESOLVED_LATENCY",
+    "message": "checkout-api P99 latency returned to baseline: 98ms",
+    "fired_at": "2026-09-12T16:05:00+00:00"
+  }
+]

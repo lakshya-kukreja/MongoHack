@@ -1,0 +1,322 @@
+[
+  {
+    "channel": "#checkout-eng",
+    "user": "marcus.eng",
+    "text": "Heads up team, deploying checkout-api v2.4.1 (commit a9f3c2) to prod-us-east-1 now. Changes include DB connection pooling tune and redis caching.",
+    "ts": "1792935620.000100",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "elena.dev",
+    "text": "Sounds good @marcus.eng. Let me know if you need eyes on the canary pods.",
+    "ts": "1792935680.000200",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "marcus.eng",
+    "text": "Canary look clean. Rolling out to all 16 pods.",
+    "ts": "1792935740.000300",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "marcus.eng",
+    "text": "Rollout complete at 09:42 EDT. Health checks green. Keeping an eye on Datadog dashboard.",
+    "ts": "1792935780.000400",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "priya.dev",
+    "text": "Updated cart-service rate limits config as well, no pods restarted, just config reload.",
+    "ts": "1792936500.000500",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "alice.dev",
+    "text": "Is anyone seeing latency creeping up on the checkout funnel? Grafana P99 curve looks steep.",
+    "ts": "1792936930.000600",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "alice.dev",
+    "text": "Checking the telemetry metrics now... looking at the graphs, it started at 14:02 UTC when latency began climbing.",
+    "ts": "1792936980.000700",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "priya.dev",
+    "text": "Hey team, inventory-sync is buffering orders and queue is piling up unexpectedly. Seeing high response times calling checkout-api.",
+    "ts": "1792937055.000800",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "marcus.eng",
+    "text": "Wait, did anyone check if an alert fired? My Datadog tab has not refreshed.",
+    "ts": "1792937120.000900",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "<!channel> ALERT [4471] [CRITICAL] [E4] checkout-api P99 latency breach: 2840ms exceeds 2000ms threshold on /api/v1/checkout",
+    "ts": "1792937225.001000",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "<!channel> ALERT [4472] [CRITICAL] [E4] HTTP 504 Gateway Timeout rate spiked to 14.8% on checkout-api downstream dependencies",
+    "ts": "1792937310.001100",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "bob.lead",
+    "text": "Seeing alert 4471. @sarah.triage can you please acknowledge alert 4471 and take Incident Commander?",
+    "ts": "1792937340.001200",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "dave.ops",
+    "text": "Sarah is currently in an offsite meeting. I am stepping in and acknowledging alert 4471 now. I will act as Incident Commander for this SEV-1.",
+    "ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "dave.ops",
+    "text": "Incident INC-2026-001 officially declared. Impact: checkout degradation, error code E4, P99 latency > 2.8s. All triage to this thread.",
+    "ts": "1792937420.001400",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "alice.dev",
+    "text": "Joining thread. I confirmed checkout latency began surging right around 14:02 UTC, though Datadog alert 4471 triggered at 14:07 UTC.",
+    "ts": "1792937460.001500",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "dave.ops",
+    "text": "@marcus.eng What was deployed recently before this started?",
+    "ts": "1792937490.001600",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "marcus.eng",
+    "text": "I deployed checkout-api v2.4.1 (commit a9f3c2) at 09:40 EDT (~13:40 UTC). It made adjustments to the connection pool sizing and redis timeout.",
+    "ts": "1792937530.001700",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "bob.lead",
+    "text": "Who deployed the database migration? Did someone run schema updates on postgres right before the incident?",
+    "ts": "1792937580.001800",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "jason.ops",
+    "text": "Checking our CI/CD audit logs and deploy records: no database migration was deployed today. Only service code updates.",
+    "ts": "1792937640.001900",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "priya.dev",
+    "text": "Confirming from infra side: no migration scripts or DDL statements executed against the database.",
+    "ts": "1792937670.002000",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "elena.dev",
+    "text": "Let's inspect the active checkout-api connection pool metrics directly.",
+    "ts": "1792937710.002100",
+    "thread_ts": "1792937710.002100",
+    "reply_count": 8,
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "marcus.eng",
+    "text": "Here is the internal debug endpoint to inspect connection states:",
+    "ts": "1792937730.002200",
+    "thread_ts": "1792937710.002100",
+    "client_msg_id": "thread-pool-msg-1",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "marcus.eng",
+    "text": "Run this probe command: curl -s -H \"Authorization: Bearer xoxb-FAKE-0000-TEST\" https://checkout-api.internal/debug/pool/status",
+    "ts": "1792937750.002300",
+    "thread_ts": "1792937710.002100",
+    "client_msg_id": "thread-pool-msg-2",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "elena.dev",
+    "text": "Output: active_connections: 64/64, queued_requests: 189, pool_exhausted: true. The new pool limit in commit a9f3c2 is choking under peak traffic.",
+    "ts": "1792937810.002400",
+    "thread_ts": "1792937710.002100",
+    "client_msg_id": "thread-pool-msg-3",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "alice.dev",
+    "text": "Yes! The redis client timeout in v2.4.1 is holding connections indefinitely when redis throttles, causing error code E4 on checkout.",
+    "ts": "1792937920.002500",
+    "thread_ts": "1792937710.002100",
+    "client_msg_id": "thread-pool-msg-6",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "elena.dev",
+    "text": "Agreed. Commit a9f3c2 is definitely the culprit.",
+    "ts": "1792937960.002600",
+    "thread_ts": "1792937710.002100",
+    "client_msg_id": "thread-pool-msg-7",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "ALERT [4474] [HIGH] [E8] Redis cache connection pool exhausted on checkout-api",
+    "ts": "1792937520.002700",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "ALERT [4476] [HIGH] [E19] Inventory-sync consumer group lag exceeded 10,000 messages (current: 14,210)",
+    "ts": "1792937760.002800",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "dave.ops",
+    "text": "Root cause identified: connection pool and redis timeout misconfiguration introduced in commit a9f3c2 (v2.4.1).",
+    "ts": "1792938100.002900",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "dave.ops",
+    "text": "We need an immediate rollback. @marcus.eng please rollback checkout-api to v2.4.0 (reverting a9f3c2).",
+    "ts": "1792938150.003000",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "elena.dev",
+    "text": "Marcus is reviewing the core dump on server 4. I am executing the rollback of a9f3c2 right now via deploy runner (commit 7b1e4a).",
+    "ts": "1792938190.003100",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "elena.dev",
+    "text": "Rollback triggered: checkout-api rolling back to v2.4.0 (commit 7b1e4a). Estimated pod replacement: 2 minutes.",
+    "ts": "1792938220.003200",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "priya.dev",
+    "text": "Canary pods on v2.4.0 are coming online. Error rates dropping.",
+    "ts": "1792938360.003300",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "marcus.eng",
+    "text": "All 16 checkout-api pods are now running v2.4.0. Connection pool queued requests down from 189 to 0.",
+    "ts": "1792938450.003400",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "elena.dev",
+    "text": "Rollback complete. All traffic served by v2.4.0. Checkout API P99 latency has dropped from 2840ms to 112ms.",
+    "ts": "1792938500.003500",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "RESOLVED: ALERT [4478] [INFO] checkout-api P99 latency returned to normal: 112ms (threshold: 2000ms)",
+    "ts": "1792938735.003600",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "RESOLVED: ALERT [4479] [INFO] Payment-gateway connection pool returned to baseline (18% utilized)",
+    "ts": "1792938840.003700",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "datadog-bot",
+    "text": "RESOLVED: ALERT [4480] [INFO] Inventory-sync queue drained to normal baseline (<50 messages)",
+    "ts": "1792938880.003800",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "alice.dev",
+    "text": "Customer checkout conversions have fully rebounded. Error code E4 rate is 0.00%.",
+    "ts": "1792938920.003900",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#incidents",
+    "user": "dave.ops",
+    "text": "All systems nominal. Marking INC-2026-001 as RESOLVED at 10:35 EDT (~14:35 UTC). Post-mortem doc to follow.",
+    "ts": "1792938960.004000",
+    "thread_ts": "1792937385.001300",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "bob.lead",
+    "text": "Great turnaround everyone. Let us ensure load testing of connection pool sizes is mandatory in staging before v2.4.2.",
+    "ts": "1792939020.004100",
+    "type": "message"
+  },
+  {
+    "channel": "#checkout-eng",
+    "user": "marcus.eng",
+    "text": "Will document the post-mortem analysis and share with the team.",
+    "ts": "1792939060.004200",
+    "type": "message"
+  }
+]
