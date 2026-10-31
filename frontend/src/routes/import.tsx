@@ -44,7 +44,21 @@ function validateRecord(raw: any, index: number, seenIds: Set<string>): { valid:
     return { valid: false, error: `Record #${index + 1}: Not a valid JSON object` };
   }
 
-  const { source_id, timestamp, source_type, author_or_actor, channel_or_service, summary, raw_content } = raw;
+  // Gracefully resolve aliases
+  const source_id = raw.source_id || raw.event_id || raw.alert_id || raw.id;
+  const rawTs = raw.timestamp || raw.ts || raw.fired_at || raw.created_at;
+  let source_type = raw.source_type;
+  if (!source_type) {
+    if (raw.speaker || raw.channel || raw.thread_ts) source_type = "slack";
+    else if (raw.monitor || raw.severity || raw.metric) source_type = "monitoring_alert";
+    else if (raw.deployer || raw.commit || raw.version) source_type = "deployment_log";
+    else source_type = "slack";
+  }
+
+  const author_or_actor = raw.author_or_actor || raw.speaker || raw.deployer || raw.monitor || raw.actor || raw.user || "system";
+  const channel_or_service = raw.channel_or_service || raw.channel || raw.service || "general";
+  const summary = raw.summary || raw.message || raw.text || raw.raw_content || `${source_type} event`;
+  const raw_content = raw.raw_content || raw.message || raw.text || raw.summary || "";
 
   if (!source_id || typeof source_id !== "string" || !source_id.trim()) {
     return { valid: false, error: `Record #${index + 1}: Missing or invalid source_id` };
@@ -54,31 +68,24 @@ function validateRecord(raw: any, index: number, seenIds: Set<string>): { valid:
     return { valid: false, error: `Record #${index + 1} (${source_id}): Duplicate source_id detected` };
   }
 
-  if (!timestamp || typeof timestamp !== "string" || isNaN(new Date(timestamp).getTime())) {
-    return { valid: false, error: `Record #${index + 1} (${source_id}): Invalid ISO-8601 timestamp` };
+  let parsedDate: Date;
+  if (typeof rawTs === "number") {
+    parsedDate = new Date(rawTs > 1e11 ? rawTs : rawTs * 1000);
+  } else if (typeof rawTs === "string" && rawTs.trim()) {
+    parsedDate = new Date(rawTs);
+  } else {
+    return { valid: false, error: `Record #${index + 1} (${source_id}): Missing timestamp` };
   }
 
-  if (!source_type || !VALID_SOURCE_TYPES.includes(source_type as SourceType)) {
+  if (isNaN(parsedDate.getTime())) {
+    return { valid: false, error: `Record #${index + 1} (${source_id}): Invalid timestamp format` };
+  }
+
+  if (!VALID_SOURCE_TYPES.includes(source_type as SourceType)) {
     return {
       valid: false,
       error: `Record #${index + 1} (${source_id}): Invalid source_type '${source_type}'. Must be slack, monitoring_alert, or deployment_log`,
     };
-  }
-
-  if (!author_or_actor || typeof author_or_actor !== "string") {
-    return { valid: false, error: `Record #${index + 1} (${source_id}): Missing author_or_actor` };
-  }
-
-  if (!channel_or_service || typeof channel_or_service !== "string") {
-    return { valid: false, error: `Record #${index + 1} (${source_id}): Missing channel_or_service` };
-  }
-
-  if (!summary || typeof summary !== "string") {
-    return { valid: false, error: `Record #${index + 1} (${source_id}): Missing summary` };
-  }
-
-  if (!raw_content || typeof raw_content !== "string") {
-    return { valid: false, error: `Record #${index + 1} (${source_id}): Missing raw_content` };
   }
 
   seenIds.add(source_id);
@@ -86,12 +93,12 @@ function validateRecord(raw: any, index: number, seenIds: Set<string>): { valid:
   const cleanRecord: EventRecord = {
     source_id: source_id.trim(),
     incident_id: typeof raw.incident_id === "string" ? raw.incident_id.trim() : "",
-    timestamp: new Date(timestamp).toISOString(),
+    timestamp: parsedDate.toISOString(),
     source_type: source_type as SourceType,
-    author_or_actor: author_or_actor.trim(),
-    channel_or_service: channel_or_service.trim(),
-    summary: summary.trim(),
-    raw_content: raw_content.trim(),
+    author_or_actor: String(author_or_actor).trim(),
+    channel_or_service: String(channel_or_service).trim(),
+    summary: String(summary).trim(),
+    raw_content: String(raw_content).trim(),
     structured_payload: raw.structured_payload,
     tags: Array.isArray(raw.tags) ? raw.tags : undefined,
   };
@@ -105,23 +112,37 @@ function parseFileContent(text: string, fileName: string, seenIds: Set<string>):
   let items: any[] = [];
 
   const trimmed = text.trim();
-  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+  let parsedJson = false;
+
+  // 1. Try parsing whole file as JSON (Array or Object with events)
+  if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
     try {
-      items = JSON.parse(trimmed);
-      if (!Array.isArray(items)) {
-        errors.push("Top-level JSON is not an array of event objects.");
+      const parsed = JSON.parse(trimmed);
+      parsedJson = true;
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (parsed && typeof parsed === "object") {
+        if (Array.isArray(parsed.events)) {
+          items = parsed.events;
+        } else {
+          items = [parsed];
+        }
       }
     } catch (e) {
-      errors.push(`JSON syntax error: ${(e as Error).message}`);
+      // Fall through to JSONL if JSON parse fails
     }
-  } else {
-    // Treat as JSONL
+  }
+
+  // 2. Fall back to JSONL parsing line-by-line
+  if (!parsedJson) {
     const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
     lines.forEach((line, idx) => {
       try {
         items.push(JSON.parse(line));
       } catch (e) {
-        errors.push(`Line ${idx + 1}: Malformed JSON line`);
+        if (errors.length < 5) {
+          errors.push(`Line ${idx + 1}: Malformed JSON line`);
+        }
       }
     });
   }
@@ -475,4 +496,3 @@ function ImportPage() {
     </div>
   );
 }
-

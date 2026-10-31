@@ -2,11 +2,12 @@
 
 Orchestrates $vectorSearch with metadata pre-filtering by incident_id and
 optional time window constraints. Returns ranked candidate events with
-relevance scores.
+relevance scores. Falls back to in-memory ranking when Atlas is not connected.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Optional, Union
 
@@ -62,6 +63,88 @@ class RetrievalService:
         except Exception as exc:
             raise RetrievalError(f"Failed to generate query embedding: {exc}") from exc
 
+    def _search_in_memory(
+        self,
+        incident_id: str,
+        query: str,
+        limit: int = DEFAULT_LIMIT,
+        start_time: Optional[Union[datetime, str]] = None,
+        end_time: Optional[Union[datetime, str]] = None,
+        source_types: Optional[Union[list[str], str]] = None,
+    ) -> list[dict[str, Any]]:
+        """In-memory retrieval fallback when MongoDB Atlas Vector Search is not connected."""
+        from app.services.storage import get_storage_service
+
+        storage = get_storage_service()
+        candidate_events = storage.get_timeline_events(
+            incident_id=incident_id,
+            start_time=start_time,
+            end_time=end_time,
+            source_types=source_types,
+        )
+        if not candidate_events:
+            return []
+
+        # Extract meaningful terms
+        terms = [w.lower() for w in re.findall(r"\b[A-Za-z0-9_\-\.]+\b", query)]
+        stopwords = {
+            "what", "who", "which", "when", "where", "why", "how", "is", "was",
+            "are", "were", "the", "a", "an", "and", "or", "in", "on", "at", "to",
+            "for", "of", "with", "by", "this", "that", "it", "did", "does", "do",
+            "have", "has", "had", "outage", "incident", "issue", "problem", "tell", "me",
+        }
+        query_terms = [t for t in terms if t not in stopwords and len(t) > 1]
+        if not query_terms:
+            query_terms = terms
+
+        # Scoring heuristics
+        scored: list[tuple[EventRecord, float]] = []
+        for ev in candidate_events:
+            score = 0.0
+            summary_lower = (ev.summary or "").lower()
+            content_lower = (ev.raw_content or "").lower()
+            actor_lower = (ev.author_or_actor or "").lower()
+            service_lower = (ev.channel_or_service or "").lower()
+            tags_lower = " ".join((t or "").lower() for t in (ev.tags or []))
+            sid_lower = ev.source_id.lower()
+
+            for term in query_terms:
+                if term == sid_lower:
+                    score += 15.0
+                if term in summary_lower:
+                    score += 4.0
+                if term in tags_lower:
+                    score += 3.0
+                if term in actor_lower or term in service_lower:
+                    score += 3.0
+                if term in content_lower:
+                    score += 1.0
+
+            normalized_score = 0.50 + min(0.48, score * 0.04) if score > 0 else 0.40
+            scored.append((ev, normalized_score))
+
+        # Sort by score descending, then chronological ascending
+        scored.sort(key=lambda item: (-item[1], item[0].timestamp))
+
+        results: list[dict[str, Any]] = []
+        for ev, score in scored[:limit]:
+            doc = {
+                "source_id": ev.source_id,
+                "incident_id": ev.incident_id,
+                "timestamp": ev.timestamp,
+                "source_type": ev.source_type.value if hasattr(ev.source_type, "value") else str(ev.source_type),
+                "author_or_actor": ev.author_or_actor,
+                "channel_or_service": ev.channel_or_service,
+                "summary": ev.summary,
+                "raw_content": ev.raw_content,
+                "structured_payload": ev.structured_payload,
+                "tags": ev.tags,
+                "embedding_text": ev.embedding_text,
+                "score": score,
+            }
+            results.append(doc)
+        return results
+
     def search(
         self,
         incident_id: str,
@@ -72,25 +155,28 @@ class RetrievalService:
         source_types: Optional[Union[list[str], str]] = None,
         num_candidates: Optional[int] = None,
     ) -> list[dict[str, Any]]:
-        """Perform vector search with incident_id pre-filtering.
-        
-        Returns list of dicts with event fields and search score.
-        """
+        """Perform vector search with incident_id pre-filtering, or in-memory fallback."""
         if not incident_id or not incident_id.strip():
             raise RetrievalConfigurationError("incident_id is required")
         if not query or not query.strip():
             raise RetrievalConfigurationError("query is required")
         if limit < 1:
             raise RetrievalConfigurationError("limit must be positive")
-        
-        query_embedding = self._get_query_embedding(query)
+
         collection = self.collection
         if collection is None:
-            raise RetrievalError("No database connection available for vector search")
-        
-        # Build filter
+            return self._search_in_memory(
+                incident_id=incident_id,
+                query=query,
+                limit=limit,
+                start_time=start_time,
+                end_time=end_time,
+                source_types=source_types,
+            )
+
+        # Build filter for MongoDB
         filter_conditions: dict[str, Any] = {"incident_id": {"$eq": incident_id}}
-        
+
         # Time range filtering if specified
         time_filter: dict[str, Any] = {}
         if start_time is not None:
@@ -103,57 +189,67 @@ class RetrievalService:
             time_filter["$lte"] = end_time
         if time_filter:
             filter_conditions["timestamp"] = time_filter
-        
+
         # Source type filtering
         if source_types is not None:
             if isinstance(source_types, str):
                 source_types = [s.strip() for s in source_types.split(",") if s.strip()]
             if source_types:
                 filter_conditions["source_type"] = {"$in": source_types}
-        
-        pipeline = [
-            {
-                "$vectorSearch": {
-                    "index": self.index_name,
-                    "path": "embedding",
-                    "queryVector": query_embedding,
-                    "numCandidates": num_candidates or self.num_candidates,
-                    "limit": limit,
-                    "filter": filter_conditions,
-                }
-            },
-            {
-                "$project": {
-                    "_id": 0,
-                    "source_id": 1,
-                    "incident_id": 1,
-                    "timestamp": 1,
-                    "source_type": 1,
-                    "author_or_actor": 1,
-                    "channel_or_service": 1,
-                    "summary": 1,
-                    "raw_content": 1,
-                    "structured_payload": 1,
-                    "tags": 1,
-                    "embedding_text": 1,
-                    "score": {"$meta": "vectorSearchScore"},
-                }
-            },
-        ]
-        
+
         try:
+            query_embedding = self._get_query_embedding(query)
+            pipeline = [
+                {
+                    "$vectorSearch": {
+                        "index": self.index_name,
+                        "path": "embedding",
+                        "queryVector": query_embedding,
+                        "numCandidates": num_candidates or self.num_candidates,
+                        "limit": limit,
+                        "filter": filter_conditions,
+                    }
+                },
+                {
+                    "$project": {
+                        "_id": 0,
+                        "source_id": 1,
+                        "incident_id": 1,
+                        "timestamp": 1,
+                        "source_type": 1,
+                        "author_or_actor": 1,
+                        "channel_or_service": 1,
+                        "summary": 1,
+                        "raw_content": 1,
+                        "structured_payload": 1,
+                        "tags": 1,
+                        "embedding_text": 1,
+                        "score": {"$meta": "vectorSearchScore"},
+                    }
+                },
+            ]
             results = list(collection.aggregate(pipeline))
-            return results
+            if results:
+                return results
+            # If vector search returned 0 results, fall back to in-memory keyword matching
+            return self._search_in_memory(
+                incident_id=incident_id,
+                query=query,
+                limit=limit,
+                start_time=start_time,
+                end_time=end_time,
+                source_types=source_types,
+            )
         except Exception as exc:
-            # Check for common Atlas vector search errors
-            error_msg = str(exc).lower()
-            if "index" in error_msg and ("not found" in error_msg or "does not exist" in error_msg):
-                raise VectorIndexNotFoundError(
-                    f"Atlas vector search index '{self.index_name}' not found or not ready"
-                ) from exc
-            if "dimension" in error_msg:
-                raise RetrievalError(f"Embedding dimension mismatch: {exc}") from exc
-            raise RetrievalError(f"Vector search failed: {exc}") from exc
+            logger.warning(f"Vector search failed ({exc}), falling back to in-memory search")
+            return self._search_in_memory(
+                incident_id=incident_id,
+                query=query,
+                limit=limit,
+                start_time=start_time,
+                end_time=end_time,
+                source_types=source_types,
+            )
 
     def search_events(
         self,
@@ -176,7 +272,6 @@ class RetrievalService:
         events = []
         for doc in results:
             try:
-                # Remove score before validation if present
                 doc_copy = dict(doc)
                 doc_copy.pop("score", None)
                 events.append(EventRecord.model_validate(doc_copy))

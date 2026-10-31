@@ -6,19 +6,26 @@ import type { IngestResponse, Investigation } from "@/types/extra";
 export { QUICK_PROMPTS } from "@/mocks/mockApi";
 export type { TimelineFilters };
 
-const BASE = "http://localhost:8000/api";
+const BASE = "http://127.0.0.1:8000/api";
 export const USE_MOCK = import.meta.env["VITE_USE_MOCK"] !== "false";
 
 export class BackendUnreachableError extends Error {
-  constructor() { super("Backend unreachable at localhost:8000. Is the API server running?"); }
+  constructor() { super("Backend unreachable at 127.0.0.1:8000. Is the API server running?"); }
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
+  const headers = { "Content-Type": "application/json", ...init?.headers };
   try {
-    res = await fetch(BASE + path, { headers: { "Content-Type": "application/json" }, ...init });
+    res = await fetch(BASE + path, { ...init, headers });
   } catch {
-    throw new BackendUnreachableError();
+    // If 127.0.0.1 failed, try localhost fallback for environments using IPv6 loopback
+    const fallbackBase = "http://localhost:8000/api";
+    try {
+      res = await fetch(fallbackBase + path, { ...init, headers });
+    } catch {
+      throw new BackendUnreachableError();
+    }
   }
   if (!res.ok) throw new Error(`Request failed (${res.status}): ${await res.text().catch(() => "")}`);
   return res.json();
