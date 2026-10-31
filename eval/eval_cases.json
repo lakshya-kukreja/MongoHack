@@ -1,0 +1,142 @@
+[
+  {
+    "case_id": "EVAL-001",
+    "category": "single-source",
+    "question": "What was the first monitoring alert fired for checkout-api during the incident?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": ["EVT-ALT-4471"],
+    "expected_source_ids": ["ALERT-4471"],
+    "acceptable_supplementary_ids": ["ALERT-4472"],
+    "ground_truth_answer": "The first monitoring alert for checkout-api was Alert 4471 (CRITICAL), which fired at 14:07:00 UTC (19:37:00+05:30) with error code E4 reporting P99 latency of 2840ms on /api/v1/checkout.",
+    "evaluation_notes": "Single-source alert test. Tests isolated alert retrieval and error code E4 extraction."
+  },
+  {
+    "case_id": "EVAL-002",
+    "category": "single-source",
+    "question": "Which deployment of checkout-api was executed before the incident began?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": ["EVT-DEP-002"],
+    "expected_source_ids": ["DEPLOY-001"],
+    "acceptable_supplementary_ids": ["SLACK-001"],
+    "ground_truth_answer": "Deployment of checkout-api v2.4.1 (commit a9f3c2) was executed by marcus.eng at 13:40:00 UTC (09:40:00 EDT) to cluster prod-us-east-1.",
+    "evaluation_notes": "Single-source deploy log test. Verifies commit SHA a9f3c2, version v2.4.1, and EDT-to-UTC conversion."
+  },
+  {
+    "case_id": "EVAL-003",
+    "category": "single-source",
+    "question": "What was the earliest complaint or observation about checkout latency posted in chat?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": ["EVT-CHT-006"],
+    "expected_source_ids": ["SLACK-002"],
+    "acceptable_supplementary_ids": ["SLACK-003"],
+    "ground_truth_answer": "Alice (alice.dev) made the earliest observation at 14:02:10 UTC in #checkout-eng asking if anyone saw checkout latency creeping up on the Grafana P99 curve.",
+    "evaluation_notes": "Single-source chat test. Identifies the first human anomaly observation in chat before official alerts."
+  },
+  {
+    "case_id": "EVAL-004",
+    "category": "multi-source",
+    "question": "What was the first sign of trouble across all sources, and who was the human responder that acknowledged it?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": ["EVT-CHT-006", "EVT-ALT-4471", "EVT-CHT-013"],
+    "expected_source_ids": ["SLACK-002", "ALERT-4471", "SLACK-006"],
+    "acceptable_supplementary_ids": ["SLACK-003", "SLACK-005"],
+    "ground_truth_answer": "The earliest sign of trouble was observed in chat by alice.dev at 14:02:10 UTC, followed by automated Datadog Alert 4471 at 14:07:00 UTC. Dave (dave.ops) acknowledged Alert 4471 at 14:09:45 UTC and declared Incident Commander role after Sarah triage was unavailable.",
+    "evaluation_notes": "Multi-source spanning chat and alerts. Must test the Actor Trap (dave.ops acknowledged, not mentioned sarah.triage)."
+  },
+  {
+    "case_id": "EVAL-005",
+    "category": "multi-source",
+    "question": "Which deployment commit caused the connection pool saturation, and which engineer executed the rollback?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": ["EVT-DEP-002", "EVT-CHT-024", "EVT-CHT-031", "EVT-DEP-006"],
+    "expected_source_ids": ["DEPLOY-001", "SLACK-010", "SLACK-012", "DEPLOY-002"],
+    "acceptable_supplementary_ids": ["SLACK-011", "ALERT-4474"],
+    "ground_truth_answer": "Deploy commit a9f3c2 (v2.4.1 deployed by marcus.eng at 13:40 UTC) caused the pool exhaustion (64/64 active, 189 queued). Elena (elena.dev) executed the rollback to v2.4.0 (commit 7b1e4a) at 14:28:10 UTC.",
+    "evaluation_notes": "Multi-source spanning deploy and chat. Tests root cause identification and the Actor Trap (elena.dev executed rollback, not marcus.eng)."
+  },
+  {
+    "case_id": "EVAL-006",
+    "category": "multi-source",
+    "question": "What was the chronological sequence of events that confirmed system recovery after the rollback?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": ["EVT-DEP-006", "EVT-CHT-035", "EVT-ALT-4478", "EVT-CHT-039", "EVT-CHT-040"],
+    "expected_source_ids": ["DEPLOY-002", "SLACK-012", "ALERT-4478", "SLACK-006"],
+    "acceptable_supplementary_ids": ["ALERT-4479", "ALERT-4480"],
+    "ground_truth_answer": "At 14:28:10 UTC, elena.dev initiated rollback commit 7b1e4a. At 14:30:05 UTC, all 16 pods completed rollout. At 14:32:15 UTC, Alert 4478 resolved showing P99 latency returned to 112ms. At 14:35:20 UTC, alice.dev confirmed conversions rebounded, and dave.ops marked the incident resolved at 14:36:00 UTC.",
+    "evaluation_notes": "Multi-source chronology test. Asserts strict time-ordering of recovery milestones spanning deploy, alerts, and chat."
+  },
+  {
+    "case_id": "EVAL-007",
+    "category": "exact-identifier",
+    "question": "What were the measured metrics and error code reported in alert 4471 for commit a9f3c2?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": ["EVT-ALT-4471", "EVT-DEP-002"],
+    "expected_source_ids": ["ALERT-4471", "DEPLOY-001"],
+    "acceptable_supplementary_ids": ["SLACK-001"],
+    "ground_truth_answer": "Alert 4471 reported Error code E4 on checkout-api with measured P99 latency of 2840ms (breaching 2000ms threshold). This degradation occurred following deployment of commit a9f3c2.",
+    "evaluation_notes": "Exact identifier keyword test. Tests exact token retrieval for '4471', 'a9f3c2', and 'E4' via hybrid search."
+  },
+  {
+    "case_id": "EVAL-008",
+    "category": "conflict",
+    "question": "At what time did the checkout degradation start according to chat versus the monitoring alert?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": ["EVT-CHT-007", "EVT-ALT-4471"],
+    "expected_source_ids": ["SLACK-003", "ALERT-4471"],
+    "acceptable_supplementary_ids": ["SLACK-002"],
+    "ground_truth_answer": "CONFLICT IDENTIFIED: In chat, alice.dev asserts the degradation started at 14:02:00 UTC when latency began climbing. In contrast, Datadog monitoring Alert 4471 fired 5 minutes later at 14:07:00 UTC (19:37:00+05:30). Both timestamps are recorded.",
+    "evaluation_notes": "Conflict surfacing test. Asserts that the system surfaces both conflicting timestamps rather than silently guessing one."
+  },
+  {
+    "case_id": "EVAL-009",
+    "category": "unanswerable",
+    "question": "Who deployed the database migration on postgres right before the incident?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": [],
+    "expected_source_ids": [],
+    "acceptable_supplementary_ids": ["SLACK-007", "SLACK-008"],
+    "ground_truth_answer": "REFUSAL: Based on the provided deployment logs and audit records, no database migration was deployed. Chat discussion in #incidents confirms that only service code was deployed and no DDL/migration was executed.",
+    "evaluation_notes": "Unanswerable refusal test. System must explicitly decline and state that no database migration exists in the evidence."
+  },
+  {
+    "case_id": "EVAL-010",
+    "category": "unanswerable",
+    "question": "Which monitoring alert fired for inventory-sync before the team complained in chat at 14:04 UTC?",
+    "window": {
+      "start_time": "2026-10-25T13:00:00Z",
+      "end_time": "2026-10-25T15:00:00Z"
+    },
+    "expected_event_ids": [],
+    "expected_source_ids": [],
+    "acceptable_supplementary_ids": ["SLACK-004", "ALERT-4476"],
+    "ground_truth_answer": "REFUSAL: No monitoring alert fired for inventory-sync before the chat complaint at 14:04:15 UTC. The first alert for inventory-sync (Alert 4476) did not trigger until 14:16:00 UTC.",
+    "evaluation_notes": "Unanswerable gap test. Verifies system refuses to guess an alert prior to 14:04 UTC for inventory-sync."
+  }
+]
