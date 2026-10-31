@@ -9,6 +9,8 @@ from app.models.event import (
     IngestRequest,
     IngestResponse,
     TimelineResponse,
+    QueryRequest,
+    QueryResponse as QueryResponseModel,
 )
 from app.services.ingestion import parse_incident_data
 from app.services.storage import StorageService, get_storage_service
@@ -16,6 +18,13 @@ from app.services.timeline import (
     build_timeline_response,
     parse_filter_datetime,
     parse_source_types_filter,
+)
+from app.services.generator import Generator, get_generator
+from app.services.generator import (
+    GeneratorTimeoutError,
+    GeneratorRateLimitError,
+    GeneratorProviderError,
+    GeneratorConfigurationError,
 )
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
@@ -176,3 +185,73 @@ async def get_incident_event(
         )
 
     return event
+
+
+@router.post(
+    "/{incident_id}/query",
+    response_model=QueryResponseModel,
+    summary="Ask an investigation question (RAG)",
+)
+async def query_incident(
+    incident_id: str,
+    payload: QueryRequest,
+    storage: StorageService = Depends(get_storage_service),
+    generator: Generator = Depends(get_generator),
+) -> QueryResponseModel:
+    """Perform grounded RAG query over incident evidence with citation validation."""
+    if not storage.incident_exists(incident_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Incident '{incident_id}' not found",
+        )
+    
+    try:
+        result = generator.query(
+            incident_id=incident_id,
+            query=payload.query,
+            limit=payload.limit,
+            start_time=payload.start_time,
+            end_time=payload.end_time,
+        )
+        return QueryResponseModel(
+            answer=result.answer,
+            citations=result.citations,
+            unverified_citations=result.unverified_citations,
+            retrieved_events=result.retrieved_events,
+        )
+    except GeneratorTimeoutError as exc:
+        logger.warning(f"LLM timeout for query on {incident_id}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="LLM provider timed out",
+        ) from exc
+    except GeneratorRateLimitError as exc:
+        logger.warning(f"LLM rate limit for query on {incident_id}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLM provider unavailable or rate-limited",
+        ) from exc
+    except GeneratorProviderError as exc:
+        logger.warning(f"LLM provider error for query on {incident_id}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLM provider unavailable or rate-limited",
+        ) from exc
+    except GeneratorConfigurationError as exc:
+        logger.warning(f"LLM configuration error for query on {incident_id}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="LLM provider unavailable or rate-limited",
+        ) from exc
+    except ValueError as exc:
+        logger.warning(f"Validation error for query on {incident_id}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.error(f"Unexpected error during query: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to process query",
+        ) from exc

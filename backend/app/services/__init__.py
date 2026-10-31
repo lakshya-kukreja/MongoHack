@@ -1,5 +1,26 @@
 """Services package."""
 
+from app.services.embeddings import (
+    EmbeddingConfigurationError,
+    EmbeddingDimensionError,
+    EmbeddingError,
+    EmbeddingInputError,
+    EmbeddingProvider,
+    EmbeddingProviderError,
+    EmbeddingRateLimitError,
+    EmbeddingTimeoutError,
+    GeminiEmbeddingProvider,
+    OpenAIEmbeddingProvider,
+    create_embedding_provider,
+    generate_embedding,
+    generate_embeddings_batch,
+    generate_event_embedding,
+    generate_event_embeddings,
+    get_embedding,
+    get_embeddings_batch,
+    get_event_embedding_text,
+    validate_embedding_dimension,
+)
 from app.services.ingestion import (
     normalize_event_dict,
     parse_incident_data,
@@ -8,6 +29,13 @@ from app.services.storage import (
     StorageService,
     get_storage_service,
     set_storage_service,
+)
+from app.services.embedding_backfill import (
+    ATLAS_VECTOR_DIMENSIONS,
+    BackfillResult,
+    EmbeddingAudit,
+    EmbeddingBackfillService,
+    classify_embedding,
 )
 from app.services.timeline import (
     build_timeline_response,
@@ -18,11 +46,35 @@ from app.services.timeline import (
 )
 
 __all__ = [
+    "EmbeddingConfigurationError",
+    "EmbeddingDimensionError",
+    "EmbeddingError",
+    "EmbeddingInputError",
+    "EmbeddingProvider",
+    "EmbeddingProviderError",
+    "EmbeddingRateLimitError",
+    "EmbeddingTimeoutError",
+    "GeminiEmbeddingProvider",
+    "OpenAIEmbeddingProvider",
+    "create_embedding_provider",
+    "generate_embedding",
+    "generate_embeddings_batch",
+    "generate_event_embedding",
+    "generate_event_embeddings",
+    "get_embedding",
+    "get_embeddings_batch",
+    "get_event_embedding_text",
+    "validate_embedding_dimension",
     "normalize_event_dict",
     "parse_incident_data",
     "StorageService",
     "get_storage_service",
     "set_storage_service",
+    "ATLAS_VECTOR_DIMENSIONS",
+    "BackfillResult",
+    "EmbeddingAudit",
+    "EmbeddingBackfillService",
+    "classify_embedding",
     "sort_events_chronologically",
     "parse_filter_datetime",
     "parse_source_types_filter",

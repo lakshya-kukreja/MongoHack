@@ -25,15 +25,20 @@ class Settings(BaseSettings):
     )
     MONGODB_DB_NAME: str = Field(default="incident_investigator", description="MongoDB database name")
 
-    # Embedding provider
-    EMBEDDING_PROVIDER: str = Field(default="openai")
+    # Embedding provider (Gemini defaults; OpenAI remains supported)
+    EMBEDDING_PROVIDER: str = Field(default="gemini")
     EMBEDDING_API_KEY: str = Field(default="")
-    EMBEDDING_MODEL_NAME: str = Field(default="text-embedding-3-small")
+    EMBEDDING_MODEL_NAME: str = Field(default="gemini-embedding-2")
+    EMBEDDING_DIMENSIONS: int = Field(
+        default=1536,
+        gt=0,
+        description="Requested embedding dimension; must match backend/atlas_vector_index.json.",
+    )
 
-    # LLM provider
-    LLM_PROVIDER: str = Field(default="openai")
+    # LLM provider (Gemini defaults; OpenAI remains supported)
+    LLM_PROVIDER: str = Field(default="gemini")
     LLM_API_KEY: str = Field(default="")
-    LLM_MODEL_NAME: str = Field(default="gpt-4o-mini")
+    LLM_MODEL_NAME: str = Field(default="gemini-3.8-flash")
 
     # CORS
     CORS_ORIGINS: Union[list[str], str] = Field(

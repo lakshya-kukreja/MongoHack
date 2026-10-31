@@ -32,7 +32,7 @@ During an outage, engineering teams produce heterogeneous, fragmented data acros
       │  Ingestion Engine   │ ◄── [IMPLEMENTED: backend/app/services/ingestion.py]
       └──────────┬──────────┘
                  │
-                 ├── Generates Embeddings (OpenAI / Gemini) ◄── [PLANNED: BE-106: embeddings.py]
+                 ├── Generates Embeddings (Gemini default / OpenAI supported) ◄── [BE-106, BE-113: embeddings.py]
                  │
                  ▼
       ┌──────────────────────────────────────────────────┐
@@ -101,7 +101,7 @@ During an outage, engineering teams produce heterogeneous, fragmented data acros
 | **Storage Service** | `backend/app/services/storage.py` | Person 1 | **IMPLEMENTED** | MongoDB Atlas CRUD, index creation, in-memory mock fallback, duplicate handling, incident listing aggregation. |
 | **Timeline Engine** | `backend/app/services/timeline.py` | Person 1 | **IMPLEMENTED** | Pure deterministic sorting ascending by timestamp, inclusive time-windowing, and source-type filtering. |
 | **REST API (Core)** | `backend/app/api/incidents.py` | Person 1 | **IMPLEMENTED** | `/api/health`, `/api/incidents/ingest`, `/api/incidents`, `/api/incidents/{id}/timeline`, `/api/incidents/{id}/events/{source_id}`. |
-| **Vector Embeddings** | `backend/app/services/embeddings.py` | Person 1 | **PLANNED (BE-106)** | OpenAI `text-embedding-3-small` / Gemini `text-embedding-004` generation with batching and rate limiting. |
+| **Vector Embeddings** | `backend/app/services/embeddings.py` | Person 1 | **DONE (BE-106, BE-113)** | Gemini `gemini-embedding-2` (1536 dims) by default; OpenAI `text-embedding-3-small` remains supported. Batching, dimension validation, and rate limiting included. |
 | **Atlas Vector Search** | `backend/app/services/retrieval.py` | Person 1 | **PLANNED (BE-107)** | `$vectorSearch` pipeline execution with metadata pre-filtering by `incident_id`. |
 | **RAG Generator** | `backend/app/services/generator.py` | Person 1 | **PLANNED (BE-108)** | Strict grounding prompt formulation, citation extraction, validation against retrieved IDs, uncertainty handling. |
 | **Query Endpoint** | `POST /api/incidents/{id}/query` | Person 1 | **PLANNED (BE-109)** | Investigation question endpoint returning `QueryResponse` with structured citations. |
@@ -155,7 +155,7 @@ Every event across Slack, monitoring, and deployments is normalized into a unifi
 - `raw_content` (string, required): Full unaltered text of the message, alert payload, or deployment description.
 - `structured_payload` (dict, optional): Strongly-typed attributes (error codes, commit hashes, latency numbers, cluster names).
 - `embedding_text` (string, required): Canonical formatted representation used to compute vector embeddings.
-- `embedding` (list[float], optional/required for search): Vector embedding representation (1536 dims for OpenAI `text-embedding-3-small`, or 768 dims for Gemini).
+- `embedding` (list[float], optional/required for search): Vector embedding representation. Must match the Atlas vector index: 1536 dims. Gemini `gemini-embedding-2`/`gemini-embedding-001` are requested at 1536 dims via `embedContentConfig.outputDimensionality` (the top-level `outputDimensionality` field is deprecated); OpenAI `text-embedding-3-small` outputs 1536 dims natively. `gemini-embedding-001` output below its native 3072 dims is L2-normalized by the client, as required by the Gemini API guidance.
 - `tags` (list[string], optional): Categorical tags for hybrid/faceted search.
 - `created_at` (datetime, optional): Ingestion timestamp in UTC.
 
@@ -648,10 +648,11 @@ Person 3 has established 6 benchmark evaluation cases covering the full incident
 - Required variables:
   - `MONGODB_URI`: Connection string to MongoDB Atlas.
   - `MONGODB_DB_NAME`: Database name (e.g. `incident_investigator`).
-  - `EMBEDDING_PROVIDER`: `"openai"` or `"gemini"`.
+  - `EMBEDDING_PROVIDER`: `"gemini"` (default) or `"openai"`.
   - `EMBEDDING_API_KEY`: API key for embeddings.
-  - `EMBEDDING_MODEL_NAME`: e.g. `text-embedding-3-small` or `text-embedding-004`.
-  - `LLM_PROVIDER`: `"openai"` or `"gemini"`.
+  - `EMBEDDING_MODEL_NAME`: `gemini-embedding-2` (default), `gemini-embedding-001` (supported alternative), or OpenAI `text-embedding-3-small`; all are requested/validated at 1536 dims.
+  - `EMBEDDING_DIMENSIONS`: `1536`; must match `backend/atlas_vector_index.json` (`numDimensions`).
+  - `LLM_PROVIDER`: `"gemini"` (default) or `"openai"`.
   - `LLM_API_KEY`: API key for LLM.
-  - `LLM_MODEL_NAME`: e.g. `gpt-4o-mini` or `gemini-1.5-flash`.
+  - `LLM_MODEL_NAME`: `gemini-3.8-flash` (default, free tier) or OpenAI `gpt-4o-mini`.
   - `CORS_ORIGINS`: Allowed origins (e.g. `http://localhost:5173`).

@@ -9,6 +9,12 @@ from app.models.event import (
     format_utc_iso,
     parse_to_utc_datetime,
 )
+from app.core.logging import logger
+try:
+    from app.services.embeddings import generate_event_embeddings, EmbeddingError
+except Exception:
+    generate_event_embeddings = None  # type: ignore
+    EmbeddingError = Exception  # type: ignore
 
 
 def _infer_source_type(raw: dict[str, Any]) -> SourceType:
@@ -217,6 +223,7 @@ def normalize_event_dict(
 def parse_incident_data(
     data_input: Union[str, Path, list[dict[str, Any]], dict[str, Any]],
     default_incident_id: Optional[str] = None,
+    attach_embeddings: bool = False,
 ) -> list[EventRecord]:
     """Parse JSON file, JSON string, JSONL, or python dicts into validated EventRecords.
 
@@ -225,6 +232,7 @@ def parse_incident_data(
     Args:
         data_input: File path, string content, raw list of dicts, or dictionary with 'events'.
         default_incident_id: Incident ID fallback.
+        attach_embeddings: If True, attempt to generate embeddings for events.
 
     Returns:
         List of validated canonical EventRecords.
@@ -314,5 +322,18 @@ def parse_incident_data(
             )
         seen_ids.add(key)
         normalized_records.append(norm)
+
+    # Optionally attach embeddings if requested
+    if attach_embeddings and generate_event_embeddings is not None and normalized_records:
+        try:
+            embeddings = generate_event_embeddings(normalized_records)
+            for event, emb in zip(normalized_records, embeddings):
+                event.embedding = emb
+        except EmbeddingError as exc:
+            logger.warning(f"Failed to attach embeddings during ingestion: {exc}")
+            # Do not silently store invalid embeddings - leave as None
+        except Exception as exc:
+            logger.warning(f"Unexpected error attaching embeddings: {exc}")
+            # Do not silently fail - leave embeddings as None
 
     return normalized_records
