@@ -1,0 +1,199 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root {
+  --radius: 0.5rem;
+  /* User palette: bg #111318, panels #181A20, borders #292C34, text #E5E7EB, muted #9298A5, accent #818CF8 */
+  --background: oklch(0.183 0.008 268);
+  --foreground: oklch(0.928 0.006 265);
+  --card: oklch(0.21 0.01 268);
+  --card-foreground: oklch(0.928 0.006 265);
+  --popover: oklch(0.21 0.01 268);
+  --popover-foreground: oklch(0.928 0.006 265);
+  --primary: oklch(0.673 0.152 277);
+  --primary-foreground: oklch(0.183 0.008 268);
+  --secondary: oklch(0.25 0.012 268);
+  --secondary-foreground: oklch(0.928 0.006 265);
+  --muted: oklch(0.25 0.012 268);
+  --muted-foreground: oklch(0.67 0.02 265);
+  --accent: oklch(0.25 0.012 268);
+  --accent-foreground: oklch(0.928 0.006 265);
+  --destructive: oklch(0.64 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.29 0.014 268);
+  --input: oklch(0.29 0.014 268);
+  --ring: oklch(0.673 0.152 277);
+
+  --src-slack: oklch(0.68 0.16 310);
+  --src-alert: oklch(0.65 0.2 25);
+  --src-warn: oklch(0.78 0.15 75);
+  --src-deploy: oklch(0.72 0.15 150);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@utility focus-ring {
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+@utility panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+}
+
+@utility logo-mark {
+  width: 0.875rem; height: 0.875rem; border-radius: 3px;
+  border: 2px solid var(--primary);
+}
+
+@utility field {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8125rem;
+  color: var(--foreground);
+  color-scheme: dark;
+  &:focus-visible { outline: none; border-color: var(--ring); box-shadow: 0 0 0 1px var(--ring); }
+}
+
+@utility badge-slack { color: var(--src-slack); background: color-mix(in oklab, var(--src-slack) 15%, transparent); }
+@utility badge-alert { color: var(--src-alert); background: color-mix(in oklab, var(--src-alert) 15%, transparent); }
+@utility badge-warn { color: var(--src-warn); background: color-mix(in oklab, var(--src-warn) 15%, transparent); }
+@utility badge-deploy { color: var(--src-deploy); background: color-mix(in oklab, var(--src-deploy) 15%, transparent); }
+
+@utility timeline-row {
+  display: block; width: 100%; text-align: left;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  border-left: 2px solid transparent;
+  transition: background-color 0.6s ease, border-color 0.6s ease;
+  &:hover { background: var(--accent); }
+  &:focus-visible { outline: none; background: var(--accent); border-left-color: var(--ring); }
+}
+
+@utility timeline-row-highlight {
+  background: color-mix(in oklab, var(--primary) 14%, transparent) !important;
+  border-left-color: var(--primary);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+@utility chip {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  margin: 0 0.125rem; padding: 0 0.4rem;
+  border-radius: 0.3rem;
+  font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.25rem;
+  vertical-align: baseline;
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--primary) 30%, transparent);
+  cursor: pointer;
+  transition: background-color 0.15s;
+  &:hover { background: color-mix(in oklab, var(--primary) 22%, transparent); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+}
+
+@utility chip-unverified {
+  color: var(--muted-foreground) !important;
+  background: var(--muted) !important;
+  border-color: var(--border) !important;
+  cursor: help !important;
+}
+
+@utility insufficient {
+  display: flex; gap: 0.6rem;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+@utility bubble-user {
+  max-width: 85%;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.875rem;
+  border-radius: var(--radius-lg) var(--radius-lg) 0.2rem var(--radius-lg);
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  color: var(--foreground);
+}
+
+@utility quick-prompt {
+  display: block; width: 100%; text-align: left;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  transition: border-color 0.15s;
+  &:hover:not(:disabled) { border-color: color-mix(in oklab, var(--primary) 50%, var(--border)); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  &:disabled { opacity: 0.5; }
+}
+
+@utility quick-prompt-sm {
+  flex-shrink: 0; white-space: nowrap;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem; color: var(--muted-foreground);
+  border: 1px solid var(--border); border-radius: 999px;
+  &:hover:not(:disabled) { color: var(--foreground); }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+  &:disabled { opacity: 0.5; }
+}
+
+@utility send-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 2.25rem; height: 2.25rem; flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--primary); color: var(--primary-foreground);
+  &:disabled { opacity: 0.35; }
+  &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+@utility drawer-label {
+  margin-bottom: 0.5rem;
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}

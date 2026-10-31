@@ -1,0 +1,363 @@
+[
+  {
+    "source_id": "DEPLOY-101",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T13:45:00Z",
+    "source_type": "deployment_log",
+    "author_or_actor": "devops-bot",
+    "channel_or_service": "checkout-service",
+    "summary": "Deployment of checkout-service v2.4.1 to production",
+    "raw_content": "DEPLOYMENT SUCCESSFUL: checkout-service v2.4.1 deployed to cluster prod-us-east-1 by marcus.eng. Git commit a1f9c8d: 'Optimize checkout DB queries and connection pooling settings'. Replaced 12 pods.",
+    "structured_payload": {
+      "version": "v2.4.1",
+      "commit": "a1f9c8d",
+      "deployer": "marcus.eng",
+      "environment": "production",
+      "cluster": "prod-us-east-1"
+    },
+    "tags": [
+      "deployment",
+      "checkout-service",
+      "release",
+      "v2.4.1"
+    ]
+  },
+  {
+    "source_id": "SLACK-300",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T13:48:15Z",
+    "source_type": "slack",
+    "author_or_actor": "marcus.eng",
+    "channel_or_service": "#deployments",
+    "summary": "Marcus confirms v2.4.1 rollout complete and watching metrics",
+    "raw_content": "v2.4.1 deployed to prod us-east-1. Healthchecks green, monitoring for 15 mins.",
+    "structured_payload": {
+      "channel": "#deployments",
+      "author": "marcus.eng"
+    },
+    "tags": [
+      "slack",
+      "deployment-watch"
+    ]
+  },
+  {
+    "source_id": "ALERT-201",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:02:00Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "datadog-monitor",
+    "channel_or_service": "checkout-service",
+    "summary": "CRITICAL: P99 latency breach on /checkout > 2000ms",
+    "raw_content": "CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms). Triggered by rule LatencyAlert-Prod on endpoint /api/v1/checkout.",
+    "structured_payload": {
+      "metric": "p99_latency_ms",
+      "threshold": 2000,
+      "measured_value": 2840,
+      "severity": "CRITICAL",
+      "endpoint": "/api/v1/checkout"
+    },
+    "tags": [
+      "alert",
+      "latency",
+      "critical",
+      "checkout"
+    ]
+  },
+  {
+    "source_id": "SLACK-301",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:04:10Z",
+    "source_type": "slack",
+    "author_or_actor": "alice.dev",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Alice notices checkout latency alert and starts investigating error rates",
+    "raw_content": "Seeing an alert for checkout latency. Investigating error rates on Stripe webhooks and checkout endpoint.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "alice.dev"
+    },
+    "tags": [
+      "slack",
+      "first-notice",
+      "triage"
+    ]
+  },
+  {
+    "source_id": "ALERT-202",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:05:30Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "cloudwatch-alerts",
+    "channel_or_service": "postgres-db-primary",
+    "summary": "WARNING: Database connection pool utilization reached 85%",
+    "raw_content": "WARNING: postgres-db-primary connection count reached 85% of max pool size (425/500 active connections). High connection allocation rate detected.",
+    "structured_payload": {
+      "metric": "db_connections_active",
+      "threshold": 400,
+      "measured_value": 425,
+      "max_pool": 500,
+      "severity": "WARNING"
+    },
+    "tags": [
+      "alert",
+      "database",
+      "connections",
+      "warning"
+    ]
+  },
+  {
+    "source_id": "SLACK-302",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:07:00Z",
+    "source_type": "slack",
+    "author_or_actor": "bob.lead",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Bob declares SEV-1 incident INC-2026-042 and steps up as Incident Commander",
+    "raw_content": "Declaring SEV-1 incident INC-2026-042 for checkout latency degradation. I am Incident Commander. @alice.dev @marcus.eng please join the bridge.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "bob.lead",
+      "incident_level": "SEV-1",
+      "role": "Incident Commander"
+    },
+    "tags": [
+      "slack",
+      "incident-declared",
+      "sev-1",
+      "incident-commander"
+    ]
+  },
+  {
+    "source_id": "SLACK-303",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:08:30Z",
+    "source_type": "slack",
+    "author_or_actor": "marcus.eng",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Marcus joins bridge and starts inspecting recent v2.4.1 deployment",
+    "raw_content": "Joined bridge. Looking into recent deployment v2.4.1 that went out at 13:45.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "marcus.eng"
+    },
+    "tags": [
+      "slack",
+      "responder",
+      "deployment-investigation"
+    ]
+  },
+  {
+    "source_id": "SLACK-304",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:12:00Z",
+    "source_type": "slack",
+    "author_or_actor": "charlie.ops",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Charlie suggests postgres disk could be full (Red Herring)",
+    "raw_content": "Could this be the disk filling up on postgres-primary? We had a log rotation issue last month that locked up connections.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "charlie.ops",
+      "hypothesis": "disk full on postgres-primary"
+    },
+    "tags": [
+      "slack",
+      "hypothesis",
+      "red-herring"
+    ]
+  },
+  {
+    "source_id": "ALERT-203",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:14:20Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "cloudwatch-alerts",
+    "channel_or_service": "postgres-db-primary",
+    "summary": "INFO: Database disk utilization normal at 34% (Disproves Charlie's hypothesis)",
+    "raw_content": "INFO: postgres-db-primary disk space utilization is normal at 34% (660GB available). Disk I/O operations are within standard operating baselines.",
+    "structured_payload": {
+      "metric": "disk_utilization_percent",
+      "measured_value": 34,
+      "status": "HEALTHY"
+    },
+    "tags": [
+      "alert",
+      "database",
+      "disk",
+      "disproof"
+    ]
+  },
+  {
+    "source_id": "SLACK-305",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:16:45Z",
+    "source_type": "slack",
+    "author_or_actor": "eve.sec",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Eve identifies root cause: connection pool leak on client timeout in db_pool.py from commit a1f9c8d",
+    "raw_content": "Found the issue! Looked at git diff for v2.4.1 commit a1f9c8d. In db_pool.py, the new async query wrapper does not release the connection back to the pool if client timeout occurs during HTTP requests. Connections stay orphaned until timeout. We are leaking DB connections rapidly.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "eve.sec",
+      "commit": "a1f9c8d",
+      "file": "db_pool.py",
+      "issue_type": "connection_leak"
+    },
+    "tags": [
+      "slack",
+      "root-cause",
+      "code-diff",
+      "db-leak"
+    ]
+  },
+  {
+    "source_id": "ALERT-204",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:18:00Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "datadog-monitor",
+    "channel_or_service": "checkout-service",
+    "summary": "CRITICAL: Connection pool exhausted (500/500), checkout 500 errors surge to 18.4%",
+    "raw_content": "CRITICAL: checkout-service database connection pool exhausted (500/500 connections in use). Endpoint /api/v1/checkout error rate surged to 18.4% (HTTP 500 Internal Server Error).",
+    "structured_payload": {
+      "metric": "http_error_rate_percent",
+      "threshold": 1.0,
+      "measured_value": 18.4,
+      "active_connections": 500,
+      "severity": "CRITICAL"
+    },
+    "tags": [
+      "alert",
+      "pool-exhaustion",
+      "http-500",
+      "critical"
+    ]
+  },
+  {
+    "source_id": "SLACK-306",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:20:10Z",
+    "source_type": "slack",
+    "author_or_actor": "bob.lead",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Bob approves immediate rollback to v2.4.0",
+    "raw_content": "Confirmed root cause. Approved: Rollback checkout-service immediately to v2.4.0. Marcus please trigger.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "bob.lead",
+      "action": "rollback_approved",
+      "target_version": "v2.4.0"
+    },
+    "tags": [
+      "slack",
+      "decision",
+      "rollback"
+    ]
+  },
+  {
+    "source_id": "DEPLOY-102",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:22:00Z",
+    "source_type": "deployment_log",
+    "author_or_actor": "devops-bot",
+    "channel_or_service": "checkout-service",
+    "summary": "Rollback deployment: checkout-service reverted to v2.4.0",
+    "raw_content": "ROLLBACK TRIGGERED: checkout-service rolled back from v2.4.1 to v2.4.0 (commit 7e4b21a) in cluster prod-us-east-1 by marcus.eng. 12 pods restarted with prior stable image.",
+    "structured_payload": {
+      "action": "rollback",
+      "reverted_from": "v2.4.1",
+      "reverted_to": "v2.4.0",
+      "commit": "7e4b21a",
+      "deployer": "marcus.eng",
+      "environment": "production"
+    },
+    "tags": [
+      "deployment",
+      "rollback",
+      "checkout-service",
+      "v2.4.0"
+    ]
+  },
+  {
+    "source_id": "SLACK-307",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:26:30Z",
+    "source_type": "slack",
+    "author_or_actor": "marcus.eng",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Marcus reports rollback to v2.4.0 complete and connection drain in progress",
+    "raw_content": "Rollback to v2.4.0 complete across all 12 pods. Active connections dropping rapidly down to 120.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "marcus.eng"
+    },
+    "tags": [
+      "slack",
+      "recovery",
+      "rollback-complete"
+    ]
+  },
+  {
+    "source_id": "ALERT-205",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:28:00Z",
+    "source_type": "monitoring_alert",
+    "author_or_actor": "datadog-monitor",
+    "channel_or_service": "checkout-service",
+    "summary": "RECOVERY: checkout-service P99 latency resolved (142ms) and error rate 0.02%",
+    "raw_content": "RESOLVED: checkout-service P99 latency recovered to 142ms (threshold < 2000ms). HTTP 500 error rate returned to baseline (0.02%). Active DB connections normalized at 88/500.",
+    "structured_payload": {
+      "metric": "p99_latency_ms",
+      "measured_value": 142,
+      "error_rate_percent": 0.02,
+      "active_connections": 88,
+      "severity": "RESOLVED"
+    },
+    "tags": [
+      "alert",
+      "recovery",
+      "resolved",
+      "checkout"
+    ]
+  },
+  {
+    "source_id": "SLACK-308",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:30:00Z",
+    "source_type": "slack",
+    "author_or_actor": "bob.lead",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Bob downgrades incident to MONITORING and schedules post-mortem",
+    "raw_content": "Metrics stable and checkout errors zeroed out. Downgrading SEV-1 to MONITORING. Thanks everyone for fast triage. Post-mortem scheduled for tomorrow 10am.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "bob.lead",
+      "status": "MONITORING"
+    },
+    "tags": [
+      "slack",
+      "downgrade",
+      "monitoring"
+    ]
+  },
+  {
+    "source_id": "SLACK-309",
+    "incident_id": "INC-2026-042",
+    "timestamp": "2026-10-30T14:45:00Z",
+    "source_type": "slack",
+    "author_or_actor": "alice.dev",
+    "channel_or_service": "#incidents-prod",
+    "summary": "Alice documents unproven hypothesis regarding upstream Stripe webhook latency",
+    "raw_content": "Post-mortem note: Someone asked if Stripe webhook latency from the upstream provider caused the initial slowdown before the connection leak compounded it. We have no upstream tracing data to verify this hypothesis, so it remains unproven.",
+    "structured_payload": {
+      "channel": "#incidents-prod",
+      "author": "alice.dev",
+      "status": "UNPROVEN_HYPOTHESIS"
+    },
+    "tags": [
+      "slack",
+      "unproven-hypothesis",
+      "post-mortem"
+    ]
+  }
+]
