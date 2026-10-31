@@ -56,11 +56,9 @@ export function ingestIncident(body: { incident_id: string; events: EventRecord[
 }
 
 export function listInvestigations(extra: Investigation[] = []): Promise<Investigation[]> {
-  return USE_MOCK ? mock.listInvestigations(extra) : req("/investigations");
+  return mock.listInvestigations(extra);
 }
 
 export function saveInvestigation(inv: Investigation): Promise<Investigation> {
-  return USE_MOCK
-    ? mock.saveInvestigation(inv)
-    : req("/investigations", { method: "POST", body: JSON.stringify(inv) });
+  return mock.saveInvestigation(inv);
 }
