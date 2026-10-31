@@ -282,3 +282,68 @@ Retrieves full details and raw structured payload for a single event.
   "tags": ["alert", "latency", "critical", "checkout"]
 }
 ```
+
+
+---
+
+## 7. Testing & Evaluation
+
+The repository includes a comprehensive 2-tier testing and evaluation harness validating ingestion integrity, retrieval recall, citation fidelity, and edge-case traps.
+
+### 7.1 Ingestion Validation (`validate_ingestion.py`)
+Validates that heterogeneous raw sources are normalized, chunked, and stored with zero data loss.
+
+```bash
+# Run in offline mode (validates on local JSON/text dumps)
+python validate_ingestion.py --offline
+
+# Or against a live MongoDB Atlas cluster (when MONGODB_URI is set)
+python validate_ingestion.py
+```
+
+**Validation Checks (8/8 Pass):**
+1. **Mandatory Fields & Unique IDs:** Every event has `event_id`, `timestamp_utc`, `source_type`, and `raw_ref` with 100% unique IDs.
+2. **UTC Conversion:** Server EDT (`09:40:00 EDT`), Alert IST (`19:37:00+05:30`), and Slack epoch timestamps match hand-computed UTC.
+3. **Zero-Loss Count Reconciliation:** 62 raw records -> 62 normalized events -> 32 chunks with zero events lost.
+4. **Referential Integrity:** Every `chunk.event_ids` entry exists in the normalized events collection.
+5. **Window Limits:** All chat conversation chunks obey <= 10 messages and <= 10 minutes span.
+6. **Deduplication:** Re-import of the same file is caught and rejected by SHA-256 `file_hash`.
+7. **Secret Redaction:** Fake token `xoxb-FAKE-0000-TEST` is safely masked as `[REDACTED_SECRET]` in all stored text.
+8. **Conflict Preservation:** Both the 14:02 chat claim and 14:07 alert timestamp are preserved in `raw_ref`.
+
+---
+
+### 7.2 Benchmark Evaluation Suite (`eval/run_tests.py`)
+Runs 13 automated Pytest regression tests against the 10 benchmark cases in `eval/eval_cases.json`:
+
+```bash
+# Run all evaluation tests via pytest
+python eval/run_tests.py
+# or
+pytest eval/tests/ -v
+```
+
+**Evaluated Criteria (13/13 Pass):**
+- **Recall@5 & Mean Recall:** Asserts high retrieval recall on all ground-truth target event IDs across answerable cases.
+- **Citation Accuracy:** Verifies all cited event IDs exist in the retrieved candidate set, and all quoted timestamps match stored values.
+- **Refusal Correctness:** Refuses unanswerable cases (`EVAL-009` DB migration, `EVAL-010` inventory-sync alert gap) with zero false refusals on valid queries.
+- **Filter Isolation:** Asserts zero leakage from last month's distractor (`incident_000`) or out-of-window events.
+- **Deterministic Ordering:** Verifies timeline is strictly sorted ascending by UTC timestamp.
+- **Conflict Surfacing:** Verifies timestamp discrepancies are explicitly highlighted.
+- **Actor Traps:** Distinguishes actual operational actors (`dave.ops` ack, `elena.dev` rollback) from @mentioned colleagues.
+- **Security Redaction:** Verifies secret tokens never appear in answers or timeline records.
+
+---
+
+### 7.3 Demo & Database Seeding (`demo/seed.py`)
+Loads `incident_001` and `incident_000` into database storage and checks Atlas Vector Search index readiness before demo execution:
+
+```bash
+# Seed in offline mode
+python demo/seed.py --offline
+
+# Or seed live MongoDB Atlas and poll for Vector Search readiness
+python demo/seed.py --uri "<MONGODB_URI>"
+```
+
+See [`demo/demo_script.md`](demo/demo_script.md) for the 7-minute live presentation walkthrough and [`demo/ppt_eval_slide.md`](demo/ppt_eval_slide.md) for presentation slide content.
