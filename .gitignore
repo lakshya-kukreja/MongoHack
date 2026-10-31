@@ -32,12 +32,17 @@ env/
 .env.*.local
 *.pem
 *.key
+*MONGODB_URI*
+*.secret
 
 # Testing & Coverage
 .pytest_cache/
 .coverage
 htmlcov/
 .tox/
+results/run_*.json
+eval/results/run_*.json
+eval/results/*.tmp
 
 # Frontend
 node_modules/

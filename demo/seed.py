@@ -17,7 +17,10 @@ BACKEND_DIR = REPO_ROOT / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 sys.path.insert(0, str(REPO_ROOT))
 
-from backend.app.services.ingestion import IngestionEngine
+try:
+    from app.services.ingestion import IngestionEngine
+except ImportError:
+    from backend.app.services.ingestion import IngestionEngine
 
 
 def wait_for_atlas_index_readiness(db, collection_name: str = "chunks", index_name: str = "vector_index", timeout_secs: int = 45):
