@@ -1,16 +1,16 @@
 import * as mock from "@/mocks/mockApi";
 import type { TimelineFilters } from "@/mocks/mockApi";
 import type { EventRecord, IncidentSummary, QueryRequest, QueryResponse, TimelineResponse } from "@/types/api";
-import type { IngestResponse, Investigation } from "@/types/extra";
+import type { IngestRequest, IngestResponse, Investigation } from "@/types/extra";
 
 export { QUICK_PROMPTS } from "@/mocks/mockApi";
 export type { TimelineFilters };
 
-const BASE = "http://127.0.0.1:8000/api";
-export const USE_MOCK = import.meta.env["VITE_USE_MOCK"] !== "false";
+const BASE = import.meta.env["VITE_API_URL"] || "http://127.0.0.1:8000/api";
+export const USE_MOCK = import.meta.env["VITE_USE_MOCK"] === "true";
 
 export class BackendUnreachableError extends Error {
-  constructor() { super("Backend unreachable at 127.0.0.1:8000. Is the API server running?"); }
+  constructor() { super(`Backend unreachable at ${BASE}. Is the API server running?`); }
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -19,13 +19,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(BASE + path, { ...init, headers });
   } catch {
-    // If 127.0.0.1 failed, try localhost fallback for environments using IPv6 loopback
-    const fallbackBase = "http://localhost:8000/api";
-    try {
-      res = await fetch(fallbackBase + path, { ...init, headers });
-    } catch {
-      throw new BackendUnreachableError();
-    }
+    throw new BackendUnreachableError();
   }
   if (!res.ok) throw new Error(`Request failed (${res.status}): ${await res.text().catch(() => "")}`);
   return res.json();
@@ -56,16 +50,12 @@ export function queryIncident(incidentId: string, body: QueryRequest): Promise<Q
     : req(`/incidents/${encodeURIComponent(incidentId)}/query`, { method: "POST", body: JSON.stringify(body) });
 }
 
-export function ingestIncident(body: { incident_id: string; events: EventRecord[]; title?: string }): Promise<IngestResponse> {
-  return USE_MOCK
-    ? mock.ingestIncident(body)
-    : req("/incidents/ingest", { method: "POST", body: JSON.stringify({ incident_id: body.incident_id, events: body.events }) });
-}
-
-export function listInvestigations(extra: Investigation[] = []): Promise<Investigation[]> {
-  return mock.listInvestigations(extra);
-}
-
-export function saveInvestigation(inv: Investigation): Promise<Investigation> {
-  return mock.saveInvestigation(inv);
+export async function ingestIncident(payload: IngestRequest): Promise<IngestResponse> {
+  if (USE_MOCK) {
+    return mock.ingestIncident(payload);
+  }
+  return req("/incidents/ingest", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

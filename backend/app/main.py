@@ -56,11 +56,12 @@ def create_app() -> FastAPI:
     if isinstance(origins, str):
         origins = [orig.strip() for orig in origins.split(",") if orig.strip()]
 
+    is_wildcard = "*" in origins
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=origins,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_origins=["*"] if is_wildcard else origins,
+        allow_credentials=False if is_wildcard else True,
+        allow_methods=["*"],
         allow_headers=["*"],
     )
 
@@ -78,19 +79,16 @@ def create_app() -> FastAPI:
             # Scoped development policy to allow Swagger UI & ReDoc CDN assets without unsafe-eval
             response.headers["Content-Security-Policy"] = (
                 "default-src 'self'; "
-                "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
-                "style-src 'self' https://cdn.jsdelivr.net 'unsafe-inline' https://fonts.googleapis.com; "
-                "img-src 'self' data: https://fastapi.tiangolo.com https://cdn.jsdelivr.net; "
-                "font-src 'self' https://fonts.gstatic.com data:; "
-                "connect-src 'self'; "
-                "frame-ancestors 'none';"
+                "img-src 'self' data: https://fastapi.tiangolo.com; "
+                "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                "font-src 'self' data: https://cdn.jsdelivr.net;"
             )
-        else:
-            response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
-
         return response
 
+    # Mount API routers under prefix /api
     app.include_router(api_router)
+
     return app
 
 

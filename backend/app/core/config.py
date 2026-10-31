@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     APP_ENV: str = Field(default="development", description="Environment: development, test, production")
-    HOST: str = Field(default="127.0.0.1", description="Host to bind application")
+    HOST: str = Field(default="0.0.0.0", description="Host to bind application")
     PORT: int = Field(default=8000, description="Port to bind application")
 
     # Database
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
 
     # CORS
     CORS_ORIGINS: Union[list[str], str] = Field(
-        default=["http://localhost:5173", "http://127.0.0.1:5173"],
+        default=["*"],
         description="Allowed CORS origins",
     )
 
