@@ -1,4 +1,5 @@
 {
+  "name": "vector_index",
   "fields": [
     {
       "type": "vector",

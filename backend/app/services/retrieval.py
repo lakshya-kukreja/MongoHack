@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Optional, Union
 
+from app.core.config import settings
 from app.core.logging import logger
 from app.models.event import EventRecord, parse_to_utc_datetime
 from app.services.embeddings import EmbeddingError, get_embedding_provider
@@ -37,12 +38,16 @@ class RetrievalService:
     def __init__(
         self,
         database: Any = None,
-        index_name: str = DEFAULT_INDEX_NAME,
+        index_name: Optional[str] = None,
         embedding_provider: Any = None,
         num_candidates: int = DEFAULT_NUM_CANDIDATES,
     ):
         self._db = database
-        self.index_name = index_name
+        # The index name is deployment-specific: Atlas silently returns zero
+        # results (instead of raising) when ``$vectorSearch`` targets an index
+        # that does not exist, so mismatches must be configurable and visible.
+        configured_index = (index_name or settings.VECTOR_INDEX_NAME or "").strip()
+        self.index_name = configured_index or self.DEFAULT_INDEX_NAME
         self._embedding_provider = embedding_provider
         self.num_candidates = num_candidates
 
@@ -51,6 +56,45 @@ class RetrievalService:
         if self._db is not None:
             return self._db["incident_events"]
         return None
+
+    def _assert_configured_index_available(self) -> None:
+        """Raise if the configured index is missing or not queryable.
+
+        Atlas ``$vectorSearch`` returns an empty result set rather than an
+        error when the index name is unknown, which previously surfaced as a
+        misleading insufficient-evidence answer. This check only runs after an
+        empty result set so healthy queries pay no extra cost.
+        """
+        collection = self.collection
+        if collection is None or not hasattr(collection, "list_search_indexes"):
+            return
+
+        try:
+            indexes = list(collection.list_search_indexes())
+        except Exception as exc:  # pragma: no cover - depends on Atlas privileges
+            logger.debug(f"Could not list Atlas search indexes: {exc}")
+            return
+
+        named = [idx for idx in indexes if isinstance(idx, dict) and idx.get("name")]
+        if not named:
+            # No metadata available (e.g. a mock); do not mask legitimate empties.
+            return
+
+        match = next((idx for idx in named if idx["name"] == self.index_name), None)
+        if match is None:
+            available = ", ".join(sorted(str(idx["name"]) for idx in named))
+            raise VectorIndexNotFoundError(
+                f"Atlas vector search index '{self.index_name}' not found "
+                f"(available: {available})"
+            )
+
+        status = match.get("status")
+        queryable = match.get("queryable")
+        if (isinstance(status, str) and status.upper() != "READY") or queryable is False:
+            raise VectorIndexNotFoundError(
+                f"Atlas vector search index '{self.index_name}' is not ready "
+                f"(status={status!r}, queryable={queryable!r})"
+            )
 
     def _get_query_embedding(self, query: str) -> list[float]:
         """Generate embedding for the query using the configured embedding provider."""
@@ -143,7 +187,6 @@ class RetrievalService:
         
         try:
             results = list(collection.aggregate(pipeline))
-            return results
         except Exception as exc:
             # Check for common Atlas vector search errors
             error_msg = str(exc).lower()
@@ -154,6 +197,13 @@ class RetrievalService:
             if "dimension" in error_msg:
                 raise RetrievalError(f"Embedding dimension mismatch: {exc}") from exc
             raise RetrievalError(f"Vector search failed: {exc}") from exc
+
+        if not results:
+            # Atlas returns [] (not an error) when the index name is wrong.
+            # Surface that misconfiguration instead of a false "no evidence".
+            self._assert_configured_index_available()
+
+        return results
 
     def search_events(
         self,

@@ -25,6 +25,7 @@ from app.services.generator import (
     GeneratorRateLimitError,
     GeneratorProviderError,
     GeneratorConfigurationError,
+    describe_exception_for_logging,
 )
 
 router = APIRouter(prefix="/incidents", tags=["Incidents"])
@@ -220,25 +221,41 @@ async def query_incident(
             retrieved_events=result.retrieved_events,
         )
     except GeneratorTimeoutError as exc:
-        logger.warning(f"LLM timeout for query on {incident_id}: {exc}")
+        logger.warning(
+            "LLM timeout for query on %s: %s",
+            incident_id,
+            describe_exception_for_logging(exc),
+        )
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="LLM provider timed out",
         ) from exc
     except GeneratorRateLimitError as exc:
-        logger.warning(f"LLM rate limit for query on {incident_id}: {exc}")
+        logger.warning(
+            "LLM rate limit for query on %s: %s",
+            incident_id,
+            describe_exception_for_logging(exc),
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="LLM provider unavailable or rate-limited",
         ) from exc
     except GeneratorProviderError as exc:
-        logger.warning(f"LLM provider error for query on {incident_id}: {exc}")
+        logger.warning(
+            "LLM provider error for query on %s: %s",
+            incident_id,
+            describe_exception_for_logging(exc),
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="LLM provider unavailable or rate-limited",
         ) from exc
     except GeneratorConfigurationError as exc:
-        logger.warning(f"LLM configuration error for query on {incident_id}: {exc}")
+        logger.warning(
+            "LLM configuration error for query on %s: %s",
+            incident_id,
+            describe_exception_for_logging(exc),
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="LLM provider unavailable or rate-limited",
@@ -250,7 +267,11 @@ async def query_incident(
             detail=str(exc),
         ) from exc
     except Exception as exc:
-        logger.error(f"Unexpected error during query: {exc}")
+        logger.error(
+            "Unexpected error during query on %s: %s",
+            incident_id,
+            describe_exception_for_logging(exc),
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process query",

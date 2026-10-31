@@ -104,7 +104,7 @@ To connect a live MongoDB Atlas cluster:
    In Atlas UI, navigate to **Database** -> **Search Indexes** -> **Create Search Index** -> **Atlas Vector Search (JSON Editor)**.
    - Database: `incident_investigator`
    - Collection: `incident_events`
-   - Index Name: `vector_index`
+   - Index Name: `vector_index` (must match `VECTOR_INDEX_NAME` in `.env`; the live demo cluster currently uses `vector-index`)
    - Definition:
    ```json
    {

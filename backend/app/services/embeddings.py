@@ -417,10 +417,9 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
             timeout: Request timeout in seconds.
             client: Optional injected httpx client for offline tests.
             expected_dimension: Optional validated dimension override.
-            output_dimensions: Optional requested
-                ``embedContentConfig.outputDimensionality``. Defaults to 1536
-                for Matryoshka-capable Gemini models so vectors match the Atlas
-                vector index.
+            output_dimensions: Optional requested ``outputDimensionality``.
+                Defaults to 1536 for Matryoshka-capable Gemini models so vectors
+                match the Atlas vector index.
         """
         self.api_key = api_key.strip()
         self.model = model.strip() or DEFAULT_GEMINI_EMBEDDING_MODEL
@@ -454,13 +453,14 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
                 "content": {"parts": [{"text": text}]},
             }
             if self.request_dimensions is not None:
-                # Gemini Embedding models support Matryoshka truncation. The
-                # current API schema nests the dimension under
-                # ``embedContentConfig``; the top-level ``outputDimensionality``
-                # field is deprecated (though still accepted).
-                item["embedContentConfig"] = {
-                    "outputDimensionality": self.request_dimensions
-                }
+                # Gemini Embedding models support Matryoshka truncation, so we
+                # must ask for the Atlas index size explicitly. The
+                # ``batchEmbedContents`` endpoint reads the per-request
+                # ``EmbedContentRequest.outputDimensionality`` field; the
+                # nested ``embedContentConfig`` object is only honored by
+                # ``models.embedContent`` and is silently ignored here, which
+                # makes ``gemini-embedding-001`` return its native 3072 dims.
+                item["outputDimensionality"] = self.request_dimensions
             requests.append(item)
 
         response = _post_embedding_request(
@@ -501,6 +501,9 @@ class GeminiEmbeddingProvider(EmbeddingProvider):
                 )
             vectors.append(item["values"])
 
+        # Validate the raw provider vectors *before* normalization so an
+        # ignored/unsupported dimension flag fails loudly instead of being
+        # silently truncated or rescaled.
         validated = _validate_vectors(
             vectors, len(normalized), self.expected_dimension
         )

@@ -24,6 +24,15 @@ class Settings(BaseSettings):
         description="MongoDB Atlas connection URI. If empty, falls back to in-memory store for local testing.",
     )
     MONGODB_DB_NAME: str = Field(default="incident_investigator", description="MongoDB database name")
+    VECTOR_INDEX_NAME: str = Field(
+        default="vector_index",
+        min_length=1,
+        description=(
+            "Atlas Vector Search index name. Must match the deployed index; "
+            "the name is chosen when the index is created (see "
+            "backend/atlas_vector_index.json)."
+        ),
+    )
 
     # Embedding provider (Gemini defaults; OpenAI remains supported)
     EMBEDDING_PROVIDER: str = Field(default="gemini")
@@ -39,6 +48,41 @@ class Settings(BaseSettings):
     LLM_PROVIDER: str = Field(default="gemini")
     LLM_API_KEY: str = Field(default="")
     LLM_MODEL_NAME: str = Field(default="gemini-3.8-flash")
+    LLM_GEMINI_THINKING_LEVEL: str = Field(
+        default="low",
+        description=(
+            "Gemini thinking level (minimal | low | medium | high). "
+            "Use 'none' to omit thinkingConfig and accept the provider default. "
+            "Ignored for OpenAI."
+        ),
+    )
+    LLM_MAX_ATTEMPTS: int = Field(
+        default=3,
+        ge=1,
+        le=5,
+        description="Total generation attempts including the first (1 disables retries).",
+    )
+    LLM_RETRY_BASE_DELAY_SECONDS: float = Field(
+        default=0.5,
+        ge=0,
+        le=5,
+        description="Base delay for exponential backoff between retries.",
+    )
+    LLM_RETRY_MAX_DELAY_SECONDS: float = Field(
+        default=4.0,
+        ge=0,
+        le=30,
+        description="Upper bound for a single jittered backoff delay.",
+    )
+    LLM_REQUEST_DEADLINE_SECONDS: float = Field(
+        default=30.0,
+        gt=0,
+        le=300,
+        description=(
+            "Hard wall-clock budget for one generation call including retries. "
+            "Keeps the documented 30s LLM timeout from growing silently."
+        ),
+    )
 
     # CORS
     CORS_ORIGINS: Union[list[str], str] = Field(
@@ -52,6 +96,22 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
+
+    @field_validator("LLM_GEMINI_THINKING_LEVEL")
+    @classmethod
+    def normalize_gemini_thinking_level(cls, v: str) -> str:
+        """Keep the setting case-insensitive and fail fast on typos."""
+        normalized = str(v).strip().lower()
+        if normalized in {"", "none", "off", "default"}:
+            # Empty means "do not send thinkingConfig"; the provider decides.
+            return ""
+        allowed = {"minimal", "low", "medium", "high"}
+        if normalized not in allowed:
+            raise ValueError(
+                f"LLM_GEMINI_THINKING_LEVEL must be one of {sorted(allowed)} "
+                f"(or 'none'); got '{v}'"
+            )
+        return normalized
 
 
 settings = Settings()

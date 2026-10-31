@@ -23,7 +23,17 @@
 | **BE-111** | End-to-End RAG Integration Tests & Reproducible Demo Script | Person 1 | **PENDING** | BE-109, BE-110 | `python scripts/demo_rag.py` |
 | **BE-112** | Idempotent embedding backfill for already-ingested Atlas events | Person 1 | **DONE** | BE-106C, OPS-002 | Offline mocked tests + explicit CLI backfill command; live backfill pending operator approval |
 | **BE-113** | Migrate embeddings and answer generation to Google Gemini (1536-dim) | Person 1 | **DONE** | BE-106, BE-108, BE-112 | Offline tests: `backend/.venv/bin/pytest tests/test_embeddings.py tests/test_generator.py tests/test_embedding_backfill.py -v` (58 passed); full suite 110 passed |
-| **BE-114** | Verify Gemini `gemini-embedding-001` and generation API compatibility | Person 1 | **DONE** | BE-113 | Offline tests: `backend/.venv/bin/pytest tests/test_embeddings.py tests/test_generator.py -v` (52 passed); full suite 115 passed |
+| **BE-114** | Verify Gemini `gemini-embedding-001` and generation API compatibility | Person 1 | **SUPERSEDED by BE-115** | BE-113 | Offline tests: `backend/.venv/bin/pytest tests/test_embeddings.py tests/test_generator.py -v` (52 passed); full suite 115 passed |
+| **BE-115** | Fix Gemini `batchEmbedContents` dimension flag (nested config ignored → 3072 response) | Person 1 | **DONE** | BE-114 | `backend/.venv/bin/pytest tests/test_embeddings.py -v` (41 passed); full suite 116 passed |
+| **BE-116** | Live re-validation of Gemini 1536-dim backfill after BE-115 | Person 1 | **DONE** | BE-115, operator approval | Read-only audit: 17/17 docs at 1536 dims; index `vector-index` READY |
+| **BE-117** | Fix empty RAG retrieval: `$vectorSearch` index name mismatch | Person 1 | **DONE** | BE-107, OPS-002 | `backend/.venv/bin/pytest tests/test_retrieval.py -v` (12 passed); full suite 128 passed |
+| **BE-118** | Diagnose generic 503 from live RAG query; preserve safe provider diagnostics | Person 1 | **DONE** | BE-109, BE-117 | `backend/.venv/bin/pytest tests/test_generator.py tests/test_api_query.py -v` (35 passed); full suite 146 passed |
+| **BE-119** | Investigate confirmed live Gemini generation timeout (30s) | Person 1 | **DONE** | BE-118, OPS-003 | `backend/.venv/bin/pytest tests/test_generator.py tests/test_api_query.py -q` (42 passed); full suite 153 passed |
+| **BE-120** | Avoid blocking the async query endpoint during synchronous RAG generation | Person 1 | **PENDING** | BE-119 | `async def` route calls sync `Generator.query()`; move to threadpool or async client |
+| **BE-121** | Configure/reuse LLM HTTP client and timeout (only after phase evidence) | Person 1 | **BLOCKED (OPS-004)** | BE-119 | Add configurable timeout / persistent client only if logs justify it |
+| **BE-122** | Audit read-phase Gemini generation request against official docs; find non-billable access check | Person 1 | **DONE** | BE-119, OPS-004 | Offline docs audit complete; request shape matches docs; `models.get` confirmed non-billable access check |
+| **BE-123** | Harden Gemini generation path: `thinkingLevel`, bounded retries, request deadline | Person 1 | **DONE** | BE-122, OPS-005 | `pytest tests/test_generator.py -q` (45 passed); full suite 166 passed; compileall clean. Live 503 remains a provider-availability blocker |
+| **BE-124** | Evaluate explicit OpenAI LLM provider switch while retaining Gemini embeddings | Person 1 | **DONE** | BE-123 | Configuration-only switch; `pytest tests/ -q` (166 passed); compileall clean; no code changes required |
 | **FE-201** | Frontend Scaffolding, TanStack Router & Tailwind CSS | Person 2 | **DONE (branch)** | None | Inspect `origin/frontend:frontend/package.json` |
 | **FE-202** | Shared Types & Offline Mock API Layer (`mockApi.ts`) | Person 2 | **DONE (branch)** | FE-201, DATA-301 | Inspect `origin/frontend:frontend/src/mocks/` |
 | **FE-203** | Deterministic Timeline UI with Time/Type Filters | Person 2 | **DONE (branch)** | FE-202 | Inspect `origin/frontend:frontend/src/components/TimelineView.tsx` |
@@ -40,6 +50,9 @@
 | **DATA-306** | Generation Grounding & Citation Correctness Benchmark | Person 3 | **PENDING** | BE-108, DATA-303 | Citation validation score > 95% |
 | **OPS-001** | Verify live MongoDB Atlas database/collection/persistence (read-only audit) | Shared (P1) | **DONE** | BE-103, BE-105 | Findings recorded below: Atlas reachable, `incident_investigator.incident_events` absent; no writes performed |
 | **OPS-002** | Populate Atlas `incident_investigator.incident_events` via existing ingestion path | Person 1 | **PENDING (needs approval)** | OPS-001 | Creates DB/collection + 17 seed docs; run existing `POST /api/incidents/ingest` or app startup |
+| **OPS-003** | Live-verify Gemini credentials/quota and confirm the real RAG query cause | Person 1 | **PENDING (operator-run)** | BE-118 | One `POST /api/incidents/INC-2026-042/query` after BE-118; read the new safe log fields (`status_code`, `error_category`, `provider_status`) and resolve the upstream cause |
+| **OPS-004** | Capture live generation timeout phase (`connect`/`read`/`write`/`pool`) | Person 1 | **PENDING (operator-run)** | BE-119 | One live query after BE-119; read `timeout_phase` in the 504 log line, then decide whether a timeout change is justified |
+| **OPS-005** | Non-billable `models.get` access check for `gemini-3.8-flash` | Person 1 | **PENDING (operator-run)** | BE-122 | `GET /v1beta/models/gemini-3.8-flash` with the existing key; expect 200 + `generateContent` in `supportedGenerationMethods`; no inference, no billing |
 
 ---
 
@@ -49,7 +62,7 @@
 |---|---|---|---|---|---|---|
 | **1** | **MongoDB Atlas persistence and incident ingestion** | Person 1 | **DONE** | `BE-102`, `BE-103`, `BE-105` | [`backend/app/services/storage.py`](file:///home/asus/MongoHack/backend/app/services/storage.py), [`ingestion.py`](file:///home/asus/MongoHack/backend/app/services/ingestion.py), [`db.py`](file:///home/asus/MongoHack/backend/app/core/db.py), [`incidents.py`](file:///home/asus/MongoHack/backend/app/api/incidents.py) | **Verified**: 47 unit/integration tests pass (`tests/test_ingestion.py`, `tests/test_storage*.py`, `tests/test_api*.py`). |
 | **2** | **Embedding model/provider configuration and embedding generation** | Person 1 | **DONE** | `BE-106`, `BE-113` | Settings configured in [`config.py`](file:///home/asus/MongoHack/backend/app/core/config.py) (`EMBEDDING_PROVIDER`, `EMBEDDING_API_KEY`, `EMBEDDING_MODEL_NAME`, `EMBEDDING_DIMENSIONS`). Implemented in [`backend/app/services/embeddings.py`](file:///home/asus/MongoHack/backend/app/services/embeddings.py). | **Verified**: 110 offline tests pass overall; Gemini `gemini-embedding-2` at 1536 dims is the default, OpenAI `text-embedding-3-small` remains supported. |
-| **3** | **Semantic vector retrieval with metadata filters** | Person 1 | **PENDING** | `BE-107` | Vector index defined in [`backend/atlas_vector_index.json`](file:///home/asus/MongoHack/backend/atlas_vector_index.json). Service pipeline planned in `backend/app/services/retrieval.py`. | **Pending implementation**: Index spec complete; `$vectorSearch` pipeline query execution with `incident_id` pre-filter pending. |
+| **3** | **Semantic vector retrieval with metadata filters** | Person 1 | **DONE** | `BE-107`, `BE-117` | [`backend/app/services/retrieval.py`](file:///home/asus/MongoHack/backend/app/services/retrieval.py), [`backend/atlas_vector_index.json`](file:///home/asus/MongoHack/backend/atlas_vector_index.json), `VECTOR_INDEX_NAME` in [`config.py`](file:///home/asus/MongoHack/backend/app/core/config.py). | **Verified**: `$vectorSearch` pipeline with `incident_id` pre-filter, time/source filters, `$meta` score projection, and `EventRecord` mapping covered by `tests/test_retrieval.py` (12 passed). Live read-only retrieval returned 5 events from `INC-2026-042`; a missing index now raises `VectorIndexNotFoundError` instead of silently returning `[]`. |
 | **4** | **LLM provider/model configuration through environment variables** | Person 1 | **IN PROGRESS** | `BE-101`, `BE-108` | Config schema defined in [`config.py`](file:///home/asus/MongoHack/backend/app/core/config.py) (`LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL_NAME`) and [`backend/.env.example`](file:///home/asus/MongoHack/backend/.env.example). | **In Progress**: Pydantic settings load env vars properly; runtime provider initialization and fallback logic pending `generator.py`. |
 | **5** | **Grounded answer generation using retrieved incident evidence** | Person 1 | **PENDING** | `BE-108` | Prompt formulation, context assembly (`[EVIDENCE RECORD <source_id>]`), and direct API calls planned in `backend/app/services/generator.py`. | **Pending implementation**: Generator service module not yet created. |
 | **6** | **Source-level citations validated against retrieved event IDs** | Person 1 | **PENDING** | `BE-108B` | Specification detailed in [`spec.md`](file:///home/asus/MongoHack/spec.md#32-citation-contract). Regex post-processor planned in `generator.py`. (Simulated in frontend `mockApi.ts`). | **Pending backend implementation**: Regex citation extraction and programmatic rejection into `unverified_citations` pending. |
@@ -436,6 +449,251 @@
   - `backend/.venv/bin/pytest tests/ -q` → **115 passed**.
   - `backend/.venv/bin/python -m compileall -q backend/app scripts tests` → clean.
 - **Blockers / Unchanged Items**: No live API calls, Atlas backfill, commits, pushes, or branch switches were performed. `AGENTS.md` required no change because ownership/architecture did not change. The Atlas `vector_index` remains absent and real `backend/.env` still needs operator-supplied Gemini values (see BE-113).
+- **Correction**: The field-placement claim above was disproven by a live backfill that returned 3072-dim vectors. See **BE-115**; `batchEmbedContents` ignores `embedContentConfig` and requires the per-item top-level `outputDimensionality`.
+
+### Task BE-115: Fix Gemini `batchEmbedContents` Dimension Flag
+- **Primary Owner**: Person 1
+- **Status**: **DONE**
+- **Dependencies**: BE-114
+- **Problem**: A live `gemini-embedding-001` backfill requested 1536 dims but received 3072-dim vectors, so validation rejected them before any writes. The payload nested the dimension under `embedContentConfig`, which the `batchEmbedContents` endpoint ignores.
+- **Root Cause**:
+  - `models.embedContent` accepts an `embedContentConfig` object.
+  - `models.batchEmbedContents` takes `EmbedContentRequest` items whose dimension field is the per-item top-level `outputDimensionality`; the nested config object is not applied by that endpoint.
+  - With no honored dimension flag, `gemini-embedding-001` returns its native 3072 dims.
+- **Fix**:
+  - `backend/app/services/embeddings.py`: every `requests[]` item now sends `outputDimensionality: 1536` at the top level; the ignored `embedContentConfig` object was removed.
+  - Raw response vectors are validated at exactly 1536 dimensions by `_validate_vectors` **before** `_l2_normalize` runs, so a 3072 response still fails loudly instead of being truncated.
+  - `gemini-embedding-001` L2 normalization for reduced (< 3072) dimensions is unchanged.
+  - `tests/test_embeddings.py`: updated the exact batch payload assertions and added `test_gemini_batch_payload_uses_top_level_output_dimensionality` as a regression test; the existing 3072-rejection test remains.
+  - `spec.md`: corrected the embedding contract to require the per-item top-level field for `batchEmbedContents`.
+- **Acceptance Criteria**:
+  - [x] Every `requests[]` item contains `outputDimensionality: 1536`.
+  - [x] Raw response vectors are validated at exactly 1536 before normalization.
+  - [x] `gemini-embedding-001` normalization is preserved.
+  - [x] Mocked tests cover the payload and unexpected-dimension rejection; all tests run offline.
+- **Verification Results**:
+  - `backend/.venv/bin/pytest tests/test_embeddings.py -v` → **41 passed**.
+  - `backend/.venv/bin/pytest tests/ -q` → **116 passed**.
+  - `backend/.venv/bin/python -m compileall -q backend/app scripts tests` → clean.
+- **Blockers / Unchanged Items**: No live backfill or API calls were made. The Atlas index remains 1536 dims. A live retry is tracked as BE-116 and needs operator approval plus the `vector_index`.
+
+### Task BE-116: Live Re-validation of Gemini 1536-dim Backfill
+- **Primary Owner**: Person 1
+- **Status**: **DONE**
+- **Dependencies**: BE-115, operator approval, Atlas search index
+- **Verification (read-only, no Gemini calls, no writes)**:
+  - `incident_investigator.incident_events` contains **17** docs for `INC-2026-042`.
+  - Every sampled doc has an `embedding` list of exactly **1536** dims.
+  - The deployed search index is named **`vector-index`**, `status=READY`, `queryable=True`, `numDimensions=1536`, `similarity=cosine`, with filter fields `incident_id`, `source_type`, `timestamp`.
+- **Note**: The live backfill is confirmed present. The index was created as `vector-index` (hyphen), not the canonical `vector_index`; that mismatch caused BE-117.
+- **Remaining (operator-only)**: a live Gemini-backed `POST /query` call was not performed in this session (out of scope). The retrieval half was validated end-to-end with a stub embedding provider.
+
+### Task BE-117: Fix Empty RAG Retrieval (Vector Index Name Mismatch)
+- **Primary Owner**: Person 1
+- **Status**: **DONE**
+- **Dependencies**: BE-107, OPS-002
+- **Symptom**: `POST /api/incidents/INC-2026-042/query` returned the insufficient-evidence answer with empty `citations` and `retrieved_events`, even though Atlas was reachable, the 17 docs existed, all embeddings were 1536 dims, and a search index was `READY`.
+- **Root Cause (verified read-only against Atlas)**:
+  - The deployed Atlas index is named **`vector-index`** (hyphen): `list_search_indexes()` reported `name='vector-index'`, `status='READY'`, `queryable=True`, and the expected 1536-dim cosine definition.
+  - `RetrievalService.DEFAULT_INDEX_NAME` was **`vector_index`** (underscore), so `$vectorSearch` targeted a non-existent index name.
+  - Atlas **does not raise** for the unknown index name in this cluster; it returns **0 documents** silently. `search_events()` therefore returned `[]`, and `generate_answer()` short-circuited to the insufficient-evidence phrase.
+  - Evidence: the exact pipeline with a stored 1536-dim doc vector returned `n=0` for `vector_index` and `n=5` for `vector-index`; `{"incident_id": "INC-2026-042"}` (no `$eq`) also returned 5, ruling out the filter.
+- **Fix**:
+  - `backend/app/core/config.py`: added `VECTOR_INDEX_NAME` (default canonical `vector_index`, `min_length=1`).
+  - `backend/app/services/retrieval.py`: `RetrievalService` resolves `index_name` from settings; added `_assert_configured_index_available()` so an empty result set with a missing/non-queryable index raises `VectorIndexNotFoundError` instead of silently returning `[]`.
+  - `backend/.env`: set `VECTOR_INDEX_NAME=vector-index` for the existing deployment (non-secret local config).
+  - `.env.example`, `backend/.env.example`, `spec.md`, `README.md`, `backend/atlas_vector_index.json`: documented the configurable index name and Atlas's silent-empty behavior.
+  - Added the previously missing `tests/test_retrieval.py` (pipeline/index/filters/mapping + silent-empty regression).
+- **Acceptance Criteria**:
+  - [x] `RetrievalService` uses the configured `VECTOR_INDEX_NAME`.
+  - [x] Empty results with a missing index raise `VectorIndexNotFoundError` (no silent empty retrieval).
+  - [x] The exact `$vectorSearch` pipeline is covered by mocked tests.
+  - [x] All tests run offline; no live Gemini/Atlas writes.
+- **Verification Results**:
+  - `backend/.venv/bin/pytest tests/test_retrieval.py -v` → **12 passed**.
+  - `backend/.venv/bin/pytest tests/ -q` → **128 passed**.
+  - `backend/.venv/bin/python -m compileall -q backend/app scripts tests` → clean.
+  - Read-only live check: `RetrievalService` (stub embeddings) against Atlas returned **5** events: `SLACK-308, ALERT-203, SLACK-309, SLACK-304, ALERT-205`.
+  - Uvicorn dev server reloaded with `VECTOR_INDEX_NAME=vector-index`; `/api/health` → `{"status":"ok","database":"connected"}`.
+- **Blockers / Unchanged Items**: No live Gemini calls, no Atlas writes, no index changes, no commits/pushes, no branch switch. A full live `POST /query` (which calls Gemini for the query embedding and answer) remains operator-run.
+
+### Task BE-118: Diagnose Generic 503 from Live RAG Query
+- **Primary Owner**: Person 1
+- **Status**: **DONE**
+- **Dependencies**: BE-109, BE-117
+- **Symptom**: `POST /api/incidents/INC-2026-042/query` returns `{"detail":"LLM provider unavailable or rate-limited"}` immediately after retrieval was verified.
+- **Investigation (no live API calls)**:
+  - The endpoint maps `GeneratorRateLimitError`, `GeneratorProviderError`, and `GeneratorConfigurationError` all to **HTTP 503** with the same generic detail.
+  - `generate_answer()` previously replaced every provider exception message with `"LLM provider unavailable or rate-limited"` and even converted `GeneratorConfigurationError` into `GeneratorProviderError` via a broad `except Exception`, so the real HTTP status, Gemini `error.status`, and model name were lost before logging.
+  - `GeminiLLMProvider` parsed only the HTTP status, not the response error body, and treated all non-429 4xx/5xx as the same category.
+  - Config audit (non-secret): `LLM_PROVIDER=gemini`, `LLM_MODEL_NAME=gemini-3.8-flash`, key present, identical to the embedding key.
+  - Docs audit (2026-10-28 models page): `gemini-3.8-flash` **is** a valid stable model (`gemini-3.8-flash`, released 2026-09-02, no shutdown). The request payload (`systemInstruction` + `contents[role=user]`) matches the documented `generateContent` schema, and the URL/`x-goog-api-key` header are correct.
+  - Therefore the most likely live causes are credential/model-access (`401`/`403`), quota (`429`), or upstream failure — previously indistinguishable because the status and error category were hidden.
+- **Implemented Fix** (`backend/app/services/generator.py`, `backend/app/api/incidents.py`):
+  - `GeneratorProviderError` now carries non-secret diagnostics: `provider`, `model`, `status_code`, `provider_status`, `error_category`.
+  - Added `_provider_error_details()`, `_raise_for_provider_error()`, `_classify_provider_error()`, `_sanitize_provider_message()`, and `describe_exception_for_logging()`.
+  - `GeminiLLMProvider` and `OpenAILLMProvider` now parse provider error bodies (`error.status` / `error.type`), map statuses to stable categories (`authentication_failed`, `permission_denied`, `model_not_found`, `rate_limited`, `provider_unavailable`, ...), and attach `provider`/`model`/`category` to timeout and network failures.
+  - Upstream messages are sanitized (Gemini/OpenAI-style keys and `key=`/`token=` values redacted, truncated to 300 chars) before storage/logging.
+  - `generate_answer()` now preserves `GeneratorError` subclasses (no message replacement, no configuration-error misclassification) and wraps only truly unexpected exceptions.
+  - The query endpoint logs a structured, sanitized diagnostic record (exception type, provider, model, status, provider status, category, sanitized message). The client-facing contract is unchanged: `503 "LLM provider unavailable or rate-limited"` and `504 "LLM provider timed out"`.
+- **Verification**:
+  - `backend/.venv/bin/pytest tests/test_generator.py tests/test_api_query.py -v` → **35 passed**.
+  - `backend/.venv/bin/pytest tests/ -q` → **146 passed**.
+  - `backend/.venv/bin/python -m compileall -q backend/app tests` → clean.
+  - New mocked coverage: Gemini 400/401/403/404/429/500/503 mapping, OpenAI 401 mapping, timeout diagnostics, API-key/token redaction, exception preservation, endpoint 503/504 mapping, configuration-error classification, and log redaction.
+- **Acceptance Criteria**:
+  - [x] Provider exceptions expose `provider`, `model`, `status_code`, `error_category`.
+  - [x] Logs distinguish auth/permission/model-not-found/rate-limit/5xx without leaking secrets.
+  - [x] Client response stays a generic 503/504 (no upstream body or key leakage).
+  - [x] Mocked tests cover 400/401/403/404/429/5xx and endpoint error mapping.
+- **Open Item**: The exact live upstream status is still unverified because no live Gemini calls were permitted. Operator follow-up is tracked as **OPS-003**: run one query and read the new safe log fields.
+
+### Task BE-119: Investigate Confirmed Live Gemini Generation Timeout (30s)
+- **Primary Owner**: Person 1
+- **Status**: **DONE**
+- **Dependencies**: BE-118, OPS-003
+- **Confirmed Live Evidence**:
+  - Gemini embedding request succeeds with HTTP 200.
+  - Generation fails with `GeneratorTimeoutError`: `LLM request timed out after 30.0 seconds`.
+  - Endpoint returns HTTP 504.
+  - Provider/model: Gemini `gemini-3.8-flash`.
+  - Atlas retrieval previously returned 5 events.
+- **Confirmed by Offline Inspection**:
+  - `DEFAULT_LLM_TIMEOUT = 30.0` and `httpx.Client(timeout=self.timeout)` apply 30 seconds **per HTTP phase** (connect, read, write, pool), not as one total wall-clock deadline.
+  - In production the provider is created without a shared client, so each request creates and closes a new `httpx.Client`. A test-injected client bypasses `self.timeout`.
+  - There are no retries in the generation path. `Generator.query()` performs one retrieval and exactly one `provider.generate()` call; covered by a new mocked test.
+  - For the 5 verified retrieved IDs (`SLACK-308`, `ALERT-203`, `SLACK-309`, `SLACK-304`, `ALERT-205`), the generated prompt is small: system prompt 1,229 chars, context 2,022 chars, total payload 3,539 JSON bytes (~844 rough tokens). Context size is therefore not a plausible cause of a 30-second delay.
+  - The query route is `async def` but calls the synchronous `Generator.query()` directly, so a slow generation blocks the event loop; this does not itself cause the httpx timeout but is a real concurrency defect.
+  - No application log files are stored in the repo, so the exact timeout phase and server-side latency were not available before this task.
+- **What Remains Unverified**:
+  - Whether the timeout occurred during **connect** (DNS/TLS/egress/proxy) or **read** (connection established, response delayed).
+  - Whether the cause is model latency, thinking-token defaults, region/proxy latency, or an upstream stall. The model must **not** be described as slow or unavailable without evidence.
+  - Whether the frontend issued duplicate requests: the frontend directory is not present on this branch, so only backend call count was verified.
+- **Implemented Diagnostic Change** (`backend/app/services/generator.py`):
+  - Added `timeout_phase` to `GeneratorProviderError` and `describe_exception_for_logging()`.
+  - Timeout messages now include the phase, e.g. `LLM request timed out after 30.0 seconds (phase=read)`.
+  - Added `_timeout_phase()` mapping `httpx.ConnectTimeout`/`ReadTimeout`/`WriteTimeout`/`PoolTimeout` to `connect`/`read`/`write`/`pool`.
+  - The 30-second default is unchanged, preserving the `spec.md` contract.
+- **Mocked Verification**:
+  - `backend/.venv/bin/pytest tests/test_generator.py tests/test_api_query.py -q` → **42 passed**.
+  - `backend/.venv/bin/pytest tests/ -q` → **153 passed**.
+  - `backend/.venv/bin/python -m compileall -q backend/app tests` → clean.
+  - New tests cover every timeout phase, log-field exposure, the unchanged 30-second default, and exactly one LLM call per query.
+- **Recommended Smallest Next Step**:
+  1. Operator runs **one** live query (OPS-004) and reads `timeout_phase` in the 504 log line.
+  2. If `read`: the connection succeeded and the response was slow. Then a targeted read-timeout increase (for example 60s) is the smallest plausible adjustment, with the trade-off that each request holds a worker and connection twice as long and may still be cut off by a client/proxy; changing the documented 30s default needs team agreement.
+  3. If `connect`: investigate DNS/TLS/egress/proxy first; raising the timeout would likely mask a network problem.
+  4. If `write` or `pool`: unexpected for a ~3.5 KB payload on a fresh client; investigate client reuse/connection pooling rather than the model.
+- **Follow-ups Recorded**: **OPS-004** (capture timeout phase), **BE-120** (non-blocking async query execution), **BE-121** (configurable timeout / reusable client, blocked on OPS-004 evidence).
+- **Constraints Honored**: No live Gemini calls, no Atlas writes, no backfill, no secret exposure, no commits/pushes, no branch switch.
+
+### Task BE-122: Audit Read-Phase Gemini Generation Request Against Official Docs
+- **Primary Owner**: Person 1
+- **Status**: **DONE**
+- **Dependencies**: BE-119, OPS-004
+- **Confirmed Production Diagnostic**:
+  - `gemini-embedding-001:batchEmbedContents` succeeds with HTTP 200.
+  - `gemini-3.8-flash` generation times out at 30s with `phase=read`.
+  - The request reaches read phase but no HTTP status arrives before the timeout.
+  - Prompt is ~3.5 KB; duplicate backend generation calls ruled out.
+- **Docs Audit — Request Shape Matches Official REST Contract**:
+  - URL built in `backend/app/services/generator.py` (`GeminiLLMProvider.generate`): `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`, with `model_name = self.model.removeprefix("models/")`. This matches the documented endpoint `POST https://generativelanguage.googleapis.com/v1beta/{model=models/*}:generateContent`; the `models/` normalisation prevents a doubled prefix.
+  - Headers: `x-goog-api-key: <key>` and `Content-Type: application/json`. Both are the documented REST auth/header pattern (the docs' `?key=` curl form is an alternative, not the only form).
+  - Payload from `_build_gemini_payload`: `systemInstruction.parts[].text` plus `contents[{role: "user", parts: [{text}]}]`. Both are valid `GenerateContentRequest` fields.
+  - Model name `gemini-3.8-flash` is a currently listed, generally available model and is free-tier eligible on the pricing page. No doc evidence that the identifier itself is invalid or preview-gated.
+  - Conclusion: the request is well-formed. The timeout is **not** explained by a malformed URL, wrong header, wrong payload shape, or unknown model.
+- **Docs Audit — Generation Settings (Latency-Relevant)**:
+  - The payload includes **no `generationConfig` at all**, so every default applies.
+  - Official thinking docs state `gemini-3.8-flash` defaults to **thinking On (medium)**, with `low`/`medium`/`high` supported, and that Gemini models adjust reasoning effort dynamically by default.
+  - `GenerationConfig.thinkingConfig.thinkingLevel` exists in the `generateContent` schema and is currently **not set**, so the app inherits medium thinking.
+  - `maxOutputTokens` is also unset, so the model may spend up to its output limit on thinking tokens; the docs state thinking tokens are billed/counted as output tokens.
+  - Official guidance is to lower `thinkingLevel` to reduce cost/latency, and that a small `maxOutputTokens` can truncate reasoning instead.
+  - `temperature`, `topP`, `topK`, `candidateCount`, `safetySettings`, tools and cached content are all unset — none of these are plausible causes of a 30s stall.
+  - Net: default medium thinking is a **plausible latency contributor**, not a proven cause.
+- **Docs Audit — Client Semantics (Strongest Structural Evidence)**:
+  - `httpx.Client(timeout=30.0)` applies 30s **per phase**; `generateContent` is a non-streaming call, so no response bytes (not even a status line) are emitted until generation completes.
+  - Therefore the 30s **read** timeout behaves as a total generation deadline for this call. Any generation that finishes after 30s produces exactly the observed signature: connection established, then silence, then `ReadTimeout` with no HTTP status.
+  - `phase=read` (not `connect`) also confirms DNS/TLS/egress to `generativelanguage.googleapis.com` is working, corroborated by the same host returning HTTP 200 for embeddings.
+  - Creating a fresh client per request adds only milliseconds and no retries occur; neither explains 30s.
+- **Non-Billable Access Validation (confirmed from official billing docs)**:
+  - Billing FAQ "What am I billed for?" lists only: input token count, output token count, cached token count, cached token storage duration. Metadata calls are not in that list.
+  - Billing FAQ explicitly states: *"Is GetTokens billed? Requests to the GetTokens API are not billed, and they don't count against inference quota."* — so `models.countTokens` is confirmed non-billable.
+  - Therefore `GET https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash` (`models.get`, empty request body, `x-goog-api-key` header) is a safe, minimal, non-billable access check. Its `Model` response exposes `supportedGenerationMethods` (should include `generateContent`) and `thinking`.
+  - Limitation to record honestly: `models.get` proves model visibility/capability for the key/project. It does **not** prove quota headroom, latency, or that generation will succeed.
+- **Hypotheses (ranked, with supporting evidence)**:
+  1. **Generation exceeds 30s because of default thinking** — best fit for `phase=read` + no status: non-streaming response emits nothing until completion; default medium thinking plus no `maxOutputTokens`. Supported by docs; **unproven** because no generation duration has ever been measured.
+  2. **Upstream stall / regional contention / free-tier queueing** — would also produce `phase=read`. Docs publish no latency SLO and no free-tier queueing behaviour. A quota breach would normally surface as HTTP 429, not a silent hang.
+  3. **Proxy/middlebox holds or buffers the response** — possible; a small fast embedding on the same host argues against a general egress failure, but does not rule out response buffering on larger POSTs. No evidence either way.
+  4. **Request rejected but response lost** — unlikely: argument/auth errors return 4xx quickly; a total absence of status argues against it.
+  5. **Wrong model/endpoint** — ruled out by the docs audit above.
+- **Single Smallest Next Diagnostic Action**:
+  - Operator runs **OPS-005**: one non-billable `GET /v1beta/models/gemini-3.8-flash` with the existing key and reads the metadata only. Expect HTTP 200, `supportedGenerationMethods` containing `generateContent`, and `thinking: true`.
+  - If it returns 404/403, the cause is model access, not latency, and no timeout change is warranted.
+  - If it returns 200, model access is eliminated and the only remaining unknown is timing. The next *approved* test should be a single request outside the app with a 120s client timeout and `thinkingLevel` left at default, to measure real duration; if it completes in e.g. 33s, hypothesis 1 is confirmed and the correct fix is `thinkingLevel=low` and/or streaming, not a blanket timeout increase.
+  - Structural note for later (not this task): `:streamGenerateContent` would turn the read timeout from a total-generation deadline into an inter-chunk timeout, which is the more robust design if thinking latency is confirmed.
+- **No Code Changed**: The request is docs-conformant and no evidence justifies altering timeout, model, provider, payload, or API behaviour. No tests added for the same reason (existing 153-pass suite remains the baseline).
+- **Follow-ups Recorded**: **OPS-005** (non-billable `models.get`), **BE-121** (configurable timeout/reusable client, still blocked on evidence), **BE-120** (non-blocking async query).
+- **Constraints Honored**: No live Gemini calls, no Atlas writes, no backfill, no secret exposure, no commits/pushes, no branch switch.
+
+### Task BE-123: Harden Gemini Generation Path (`thinkingLevel`, Bounded Retries, Deadline)
+- **Primary Owner**: Person 1
+- **Status**: **DONE**
+- **Dependencies**: BE-122, OPS-005
+- **New Confirmed Evidence (live, operator-run)**:
+  - `GET /v1beta/models/gemini-3.8-flash` → HTTP 200, so the model is visible to the key/project.
+  - Two independent minimal `generateContent` requests (`thinkingLevel: low`, `maxOutputTokens: 64`) returned **HTTP 503 UNAVAILABLE in ~1.1–1.4 s**, with Google's "model experiencing high demand" message.
+  - The application previously hit an httpx read timeout after 30 s.
+  - The real RAG prompt is ~3.5 KB; embeddings and Atlas retrieval are already verified.
+- **Classification**: The 503 is a **provider availability response**, not a confirmed application bug. Nothing in this task claims to fix Google's capacity issue; it makes the application degrade predictably and retry transient failures within a fixed budget.
+- **Implemented**:
+  - `LLM_GEMINI_THINKING_LEVEL` (default `low`) sent only to Gemini via `generationConfig.thinkingConfig.thinkingLevel`; `none`/`off`/`default` omits `thinkingConfig`; OpenAI payloads unchanged.
+  - Shared bounded retry helper for Gemini and OpenAI: retryable statuses `429, 500, 502, 503, 504`; connect/pool timeouts only; exponential backoff with jitter (`0.5s` base, `4.0s` cap, `3` total attempts by default).
+  - Permanent client errors (`400/401/403/404`) and read/write timeouts fail immediately (no duplicated generation).
+  - Hard overall deadline (`LLM_REQUEST_DEADLINE_SECONDS`, default `30.0s`) shared by attempts and sleeps; per-attempt timeout clamped to the remaining budget.
+  - Retry logs contain only provider, model, status/phase, attempt, and delay — no prompts, payloads, or API keys.
+  - API contract unchanged: `504 "LLM provider timed out"`, `503 "LLM provider unavailable or rate-limited"`; no model/provider fallback.
+- **Verification**:
+  - `backend/.venv/bin/pytest tests/test_generator.py -q` → **45 passed**.
+  - New mocked coverage: 503→success, repeated 503 exhausting budget, permanent 403 not retried, read timeout not retried, deadline clamp/stop, retry-policy bounds, thinking config Gemini-only, factory settings, invalid thinking level, log redaction.
+  - `backend/.venv/bin/pytest tests/ -q` → **166 passed**.
+  - `backend/.venv/bin/python -m compileall -q backend/app tests` → clean.
+- **Docs Synced**: `spec.md` §5.3 and §8 config list; `backend/.env.example`; `.env.example`.
+- **Remaining Blocker (not code)**: Google's live `generateContent` still returns `503 UNAVAILABLE` due to provider capacity. The app now retries briefly and fails predictably within the budget, but it cannot manufacture provider availability. A future live check is the only way to confirm recovery.
+- **Constraints Honored**: No live Gemini calls, no Atlas writes, no backfill, no secret exposure, no commits/pushes, no branch switch, no model/provider fallback.
+
+### Task BE-124: Evaluate Explicit OpenAI LLM Provider Switch (Gemini 503 Blocker)
+- **Primary Owner**: Person 1
+- **Status**: **DONE**
+- **Dependencies**: BE-123
+- **Why**: Gemini generation repeatedly fails with provider-side `503 UNAVAILABLE` (high demand) plus a 30s read timeout. Embeddings and Atlas retrieval are already working, so the goal is to restore reliable answer generation without touching the retrieval/embedding contract.
+- **Decision**: **Configuration only; no code changes required.** The existing `OpenAILLMProvider` is complete and already routed by explicit configuration. Gemini remains the default and is preserved.
+- **Inspection Findings (actual repository state)**:
+  - `backend/app/services/generator.py` `OpenAILLMProvider` sends `POST https://api.openai.com/v1/chat/completions` with `Authorization: Bearer <LLM_API_KEY>`, `model`, `messages` (`system` + `user`), and `temperature: 0.1`; it parses `choices[0].message.content`.
+  - It uses the same bounded retry/deadline helper as Gemini (`429, 500, 502, 503, 504`; connect/pool timeouts only; 30s default deadline) and maps `401/403/404/429/5xx` to safe diagnostics. No automatic provider fallback exists.
+  - `create_llm_provider()` selects OpenAI only when `LLM_PROVIDER=openai`; it reads `LLM_API_KEY`, `LLM_MODEL_NAME`, and the shared retry/deadline settings. It defaults the model to `gpt-4o-mini`.
+  - The app does **not** read `OPENAI_API_KEY`; the OpenAI key must be placed in `LLM_API_KEY`.
+  - Embeddings are fully independent: `RetrievalService._get_query_embedding()` uses `get_embedding_provider()` driven by `EMBEDDING_PROVIDER` / `EMBEDDING_API_KEY`. Keeping Gemini embeddings leaves stored 1536-dim vectors, the `vector-index` name, and retrieval untouched.
+  - Existing offline tests already cover OpenAI selection, request URL/payload, `401` mapping, and the guarantee that Gemini thinking fields are never sent to OpenAI.
+- **Current Non-Secret Local Configuration** (from `backend/.env`):
+  - `LLM_PROVIDER=gemini`, `LLM_MODEL_NAME=gemini-3.8-flash`
+  - `EMBEDDING_PROVIDER=gemini`, `EMBEDDING_MODEL_NAME=gemini-embedding-001`, `EMBEDDING_DIMENSIONS=1536`, `VECTOR_INDEX_NAME=vector-index`
+  - `LLM_API_KEY` is currently the same Gemini key as `EMBEDDING_API_KEY`; no OpenAI key is present in the environment.
+- **Exact Configuration-Only Switch** (edit `backend/.env` or the deployment environment, then restart the backend):
+  - Change `LLM_PROVIDER=openai`
+  - Change `LLM_API_KEY=<OpenAI API key>` (must replace the current Gemini key)
+  - Change `LLM_MODEL_NAME=gpt-4o-mini` (or another OpenAI chat-completions model enabled on the account)
+  - **Keep unchanged**: `EMBEDDING_PROVIDER=gemini`, `EMBEDDING_API_KEY=<current Gemini key>`, `EMBEDDING_MODEL_NAME=gemini-embedding-001`, `EMBEDDING_DIMENSIONS=1536`, `VECTOR_INDEX_NAME=vector-index`
+  - `LLM_GEMINI_THINKING_LEVEL` is ignored by OpenAI and may stay as-is. `LLM_MAX_ATTEMPTS`, retry delays, and `LLM_REQUEST_DEADLINE_SECONDS` apply to OpenAI too.
+  - Switching only `LLM_PROVIDER` while leaving the Gemini key/model in place will fail (`401`/`404`); all three LLM values must change together.
+- **OpenAI Billing Requirement**: A ChatGPT Plus/Pro subscription does **not** include OpenAI API credits. The operator needs a separate OpenAI Platform API key with billing/credits enabled; API usage is billed independently.
+- **Documentation Sync (no contract change)**: `.env.example` and `backend/.env.example` now warn that `LLM_API_KEY`/`LLM_MODEL_NAME` must match `LLM_PROVIDER` and that OpenAI keys/billing are separate. `spec.md` §8 documents explicit, non-fallback provider selection and the mixed OpenAI-generation + Gemini-embedding configuration.
+- **Verification Results**:
+  - `backend/.venv/bin/pytest tests/ -q` → **166 passed**, 1 pre-existing Starlette/httpx deprecation warning.
+  - `backend/.venv/bin/python -m compileall -q backend/app scripts tests` → clean.
+  - Factory probe with an OpenAI config returned `OpenAILLMProvider`, model `gpt-4o-mini`, base URL `https://api.openai.com/v1`, timeout `30.0`, and the configured retry policy.
+- **Constraints Honored**: No live API calls, no spend, no Atlas writes, no embedding/index/retrieval changes, no secret exposure, no commits/pushes, no branch switch, no runtime fallback.
+- **Next Single Action**: Add a funded OpenAI API key to `backend/.env` as `LLM_API_KEY`, set `LLM_PROVIDER=openai` and `LLM_MODEL_NAME=gpt-4o-mini`, restart the backend, and run one live `POST /api/incidents/INC-2026-042/query`.
+- **Remaining Blockers**: No OpenAI API key/billing is configured locally, so the switch is not live-verified yet. Gemini's `503 UNAVAILABLE` remains a provider-side capacity issue and is bypassed, not fixed.
 
 ---
 

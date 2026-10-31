@@ -396,12 +396,12 @@ def test_gemini_provider_requests_1536_dimensions_and_parses_response() -> None:
         {
             "model": "models/gemini-embedding-2",
             "content": {"parts": [{"text": "first"}]},
-            "embedContentConfig": {"outputDimensionality": 1536},
+            "outputDimensionality": 1536,
         },
         {
             "model": "models/gemini-embedding-2",
             "content": {"parts": [{"text": "second"}]},
-            "embedContentConfig": {"outputDimensionality": 1536},
+            "outputDimensionality": 1536,
         },
     ]
 
@@ -423,12 +423,38 @@ def test_gemini_provider_honors_configured_dimension() -> None:
     provider.embed_texts(["first"])
 
     request = captured["payload"]["requests"][0]
-    assert request["embedContentConfig"] == {"outputDimensionality": 1536}
-    assert "outputDimensionality" not in request
+    assert request["outputDimensionality"] == 1536
+    assert "embedContentConfig" not in request
+
+
+def test_gemini_batch_payload_uses_top_level_output_dimensionality() -> None:
+    """Regression: batchEmbedContents ignores the nested embedContentConfig.
+
+    A live backfill requested 1536 dims through ``embedContentConfig`` but got
+    the model's native 3072-dim output, so the dimension flag must be sent as
+    the per-request ``EmbedContentRequest.outputDimensionality`` field.
+    """
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        return httpx.Response(200, json={"embeddings": [{"values": _vector(1.0)}]})
+
+    provider = GeminiEmbeddingProvider(
+        api_key="gemini-test-key",
+        model="gemini-embedding-001",
+        client=_mock_client(handler),
+    )
+
+    provider.embed_texts(["first"])
+
+    payload = captured["payload"]
+    assert payload["requests"][0]["outputDimensionality"] == 1536
+    assert "embedContentConfig" not in payload["requests"][0]
 
 
 def test_gemini_embedding_001_requests_and_validates_1536_dimensions() -> None:
-    """gemini-embedding-001 uses the current config object and 1536-dim contract."""
+    """gemini-embedding-001 uses the top-level dimension field and 1536-dim contract."""
     captured: dict = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -462,12 +488,12 @@ def test_gemini_embedding_001_requests_and_validates_1536_dimensions() -> None:
         {
             "model": "models/gemini-embedding-001",
             "content": {"parts": [{"text": "first"}]},
-            "embedContentConfig": {"outputDimensionality": 1536},
+            "outputDimensionality": 1536,
         },
         {
             "model": "models/gemini-embedding-001",
             "content": {"parts": [{"text": "second"}]},
-            "embedContentConfig": {"outputDimensionality": 1536},
+            "outputDimensionality": 1536,
         },
     ]
     assert len(vectors) == 2

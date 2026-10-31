@@ -155,7 +155,7 @@ Every event across Slack, monitoring, and deployments is normalized into a unifi
 - `raw_content` (string, required): Full unaltered text of the message, alert payload, or deployment description.
 - `structured_payload` (dict, optional): Strongly-typed attributes (error codes, commit hashes, latency numbers, cluster names).
 - `embedding_text` (string, required): Canonical formatted representation used to compute vector embeddings.
-- `embedding` (list[float], optional/required for search): Vector embedding representation. Must match the Atlas vector index: 1536 dims. Gemini `gemini-embedding-2`/`gemini-embedding-001` are requested at 1536 dims via `embedContentConfig.outputDimensionality` (the top-level `outputDimensionality` field is deprecated); OpenAI `text-embedding-3-small` outputs 1536 dims natively. `gemini-embedding-001` output below its native 3072 dims is L2-normalized by the client, as required by the Gemini API guidance.
+- `embedding` (list[float], optional/required for search): Vector embedding representation. Must match the Atlas vector index: 1536 dims. For `models.batchEmbedContents`, Gemini `gemini-embedding-2`/`gemini-embedding-001` are requested at 1536 dims via the per-request top-level `EmbedContentRequest.outputDimensionality` field; the nested `embedContentConfig` object is only honored by `models.embedContent` and is ignored by the batch endpoint. OpenAI `text-embedding-3-small` outputs 1536 dims natively. Raw Gemini vectors are validated at exactly 1536 dims before normalization, and `gemini-embedding-001` output below its native 3072 dims is L2-normalized by the client as required by the Gemini API guidance.
 - `tags` (list[string], optional): Categorical tags for hybrid/faceted search.
 - `created_at` (datetime, optional): Ingestion timestamp in UTC.
 
@@ -225,10 +225,11 @@ To prevent hallucinated citations, the system enforces a strict citation lifecyc
 ## 4. MongoDB Atlas Vector Search & Deterministic Timeline Specification
 
 ### 4.1 Vector Index Definition `[IMPLEMENTED: backend/atlas_vector_index.json]`
-The collection `incident_events` requires an Atlas Vector Search index named `vector_index`:
+The collection `incident_events` requires an Atlas Vector Search index whose name matches `VECTOR_INDEX_NAME` (canonical default: `vector_index`). The deployed index name is chosen when the index is created and **must match exactly**: Atlas `$vectorSearch` silently returns zero documents for an unknown index name instead of raising, which would otherwise surface as a misleading insufficient-evidence answer. The name may be overridden via `VECTOR_INDEX_NAME` for deployments that used a different name.
 
 ```json
 {
+  "name": "vector_index",
   "fields": [
     {
       "type": "vector",
@@ -252,14 +253,14 @@ The collection `incident_events` requires an Atlas Vector Search index named `ve
 }
 ```
 
-### 4.2 Retrieval Query Pattern `[PLANNED: BE-107]`
+### 4.2 Retrieval Query Pattern `[IMPLEMENTED: BE-107, BE-117]`
 To guarantee semantic relevance while restricting to the target incident and timeframe:
 
 ```python
 pipeline = [
     {
         "$vectorSearch": {
-            "index": "vector_index",
+            "index": settings.VECTOR_INDEX_NAME,
             "path": "embedding",
             "queryVector": query_embedding,
             "numCandidates": 50,
@@ -271,7 +272,7 @@ pipeline = [
     },
     {
         "$project": {
-            "_id": 1,
+            "_id": 0,
             "source_id": 1,
             "incident_id": 1,
             "timestamp": 1,
@@ -281,6 +282,8 @@ pipeline = [
             "summary": 1,
             "raw_content": 1,
             "structured_payload": 1,
+            "tags": 1,
+            "embedding_text": 1,
             "score": {"$meta": "vectorSearchScore"}
         }
     }
@@ -340,12 +343,14 @@ RULES:
 5. **Generation**: LLM processes system prompt + context + user query.
 6. **Validation**: Check returned text for citation conformity against retrieved `source_id`s, strip hallucinations, return structured citations.
 
-### 5.3 Error Handling, Timeouts & Upstream Resilience `[PLANNED: BE-106B, BE-108D]`
-- **Upstream Timeouts**: Direct API calls to OpenAI or Gemini must configure explicit timeout limits (10 seconds for embeddings, 30 seconds for LLM generation). Upon timeout, the service raises an `HTTPException(status_code=504, detail="Upstream AI provider timed out")`.
-- **Rate Limits (HTTP 429) & Provider Failures (HTTP 5xx)**: Caught gracefully and mapped to `HTTPException(status_code=503, detail="Upstream AI provider unavailable or rate-limited")`. Raw stack traces or secret keys must never leak to the client.
+### 5.3 Error Handling, Timeouts & Upstream Resilience `[IMPLEMENTED]`
+- **Upstream Timeouts**: Direct API calls to OpenAI or Gemini configure explicit limits (10 seconds for embeddings, 30 seconds per LLM generation attempt). A request that exceeds the overall deadline raises `HTTPException(status_code=504, detail="LLM provider timed out")`.
+- **Bounded Retries & Deadline (BE-123)**: Generation retries transient upstream failures — HTTP 429, 500, 502, 503, 504, plus connect/pool transport timeouts — using exponential backoff with jitter (base `0.5s`, cap `4.0s`, default 3 total attempts). Permanent client errors (400/401/403/404) and read/write timeouts are never retried. `LLM_REQUEST_DEADLINE_SECONDS` (default `30.0`) is a hard wall-clock budget shared by all attempts and backoff sleeps, so retries cannot silently extend the documented 30s contract; when it is spent, the last safe provider diagnostic is surfaced. Retry logs include provider, model, status/phase, attempt, and delay only — never prompts, payloads, or API keys.
+- **Gemini Thinking Configuration (BE-123)**: `LLM_GEMINI_THINKING_LEVEL` (default `low`) is sent only to Gemini as `generationConfig.thinkingConfig.thinkingLevel` (canonical enum `MINIMAL`/`LOW`/`MEDIUM`/`HIGH`). An empty value or `none`/`off`/`default` omits `thinkingConfig` and accepts the provider default. OpenAI payloads are unchanged and never receive Gemini thinking fields.
+- **Rate Limits (HTTP 429) & Provider Failures (HTTP 5xx)**: After the retry budget is exhausted, failures are caught gracefully and mapped to `HTTPException(status_code=503, detail="LLM provider unavailable or rate-limited")`. Raw stack traces or secret keys must never leak to the client.
 - **Negative & Insufficient Evidence Guarantees**: When retrieved evidence cannot answer the question or query matches negative evaluation criteria (e.g. EVAL-006), the response is HTTP 200 with `answer = "Based on the retrieved incident records, there is insufficient evidence to answer this question."`, `citations = []`, and `unverified_citations = []`.
 - **Deterministic Offline Testing**: All test suites in `tests/` operate with mock embedding vectors and mock LLM generation responses, enabling rapid, 100% offline CI verification without consuming API tokens or requiring network access.
-- **Live Integration & Demo Modes**: An opt-in live test suite and demonstration script (`scripts/demo_rag.py`) conditionally run against real cloud credentials when `OPENAI_API_KEY` or `GEMINI_API_KEY` and `MONGODB_URI` are supplied in `.env`.
+- **Live Integration & Demo Modes**: An opt-in live test suite and demonstration script (`scripts/demo_rag.py`) conditionally run against real cloud credentials when `LLM_API_KEY`, `EMBEDDING_API_KEY`, and `MONGODB_URI` are supplied in `.env`. The application reads the provider-neutral `LLM_*` / `EMBEDDING_*` variables and does **not** read `OPENAI_API_KEY` or `GEMINI_API_KEY` directly.
 
 ---
 
@@ -648,6 +653,7 @@ Person 3 has established 6 benchmark evaluation cases covering the full incident
 - Required variables:
   - `MONGODB_URI`: Connection string to MongoDB Atlas.
   - `MONGODB_DB_NAME`: Database name (e.g. `incident_investigator`).
+  - `VECTOR_INDEX_NAME`: Atlas Vector Search index name (default `vector_index`). Must match the deployed index exactly; the live demo cluster currently uses `vector-index`.
   - `EMBEDDING_PROVIDER`: `"gemini"` (default) or `"openai"`.
   - `EMBEDDING_API_KEY`: API key for embeddings.
   - `EMBEDDING_MODEL_NAME`: `gemini-embedding-2` (default), `gemini-embedding-001` (supported alternative), or OpenAI `text-embedding-3-small`; all are requested/validated at 1536 dims.
@@ -655,4 +661,10 @@ Person 3 has established 6 benchmark evaluation cases covering the full incident
   - `LLM_PROVIDER`: `"gemini"` (default) or `"openai"`.
   - `LLM_API_KEY`: API key for LLM.
   - `LLM_MODEL_NAME`: `gemini-3.8-flash` (default, free tier) or OpenAI `gpt-4o-mini`.
+  - `LLM_GEMINI_THINKING_LEVEL`: Gemini only; `minimal`, `low` (default), `medium`, or `high`. `none`/`off`/`default` omits thinking config.
+  - `LLM_MAX_ATTEMPTS`: Total generation attempts including the first (default `3`; `1` disables retries; max `5`).
+  - `LLM_RETRY_BASE_DELAY_SECONDS`: Exponential backoff base (default `0.5`).
+  - `LLM_RETRY_MAX_DELAY_SECONDS`: Per-retry backoff cap (default `4.0`).
+  - `LLM_REQUEST_DEADLINE_SECONDS`: Hard wall-clock budget for one generation call including retries (default `30.0`).
   - `CORS_ORIGINS`: Allowed origins (e.g. `http://localhost:5173`).
+- **Explicit provider selection (no runtime fallback)**: `LLM_PROVIDER` selects answer generation and `EMBEDDING_PROVIDER` selects embeddings independently. The application never switches providers automatically. To move only generation to OpenAI while keeping Gemini embeddings, keep the entire `EMBEDDING_*` block unchanged (`EMBEDDING_PROVIDER=gemini`, Gemini embedding key/model, `EMBEDDING_DIMENSIONS=1536`) so the stored Atlas vectors and `vector-index` definition remain valid, and set `LLM_PROVIDER=openai`, `LLM_API_KEY=<OpenAI API key>`, and `LLM_MODEL_NAME=gpt-4o-mini` (or another OpenAI chat-completions model enabled on the account). The app reads `LLM_API_KEY`, not `OPENAI_API_KEY`. OpenAI API access and billing are separate from a ChatGPT subscription.
