@@ -11,6 +11,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from app.core.logging import logger
+
 try:
     from app.models.event import (
         EventRecord,
@@ -28,6 +30,12 @@ except ImportError:
     )
     from backend.app.models.schema import SourceDocument, NormalizedEvent, ChunkRecord
 
+try:
+    from app.services.embeddings import generate_event_embeddings, EmbeddingError
+except Exception:
+    generate_event_embeddings = None  # type: ignore
+    EmbeddingError = Exception  # type: ignore
+
 
 SECRET_REGEX = re.compile(r"xox[baprs]-[A-Za-z0-9-]+", re.IGNORECASE)
 
@@ -39,48 +47,110 @@ def compute_file_hash(content: str) -> str:
 
 def redact_secrets(text: str) -> str:
     """Masks secret tokens (e.g. Slack tokens) to prevent credential leakage."""
-    return re.sub(r"xox[baprs]-[A-Za-z0-9-]+", "[REDACTED_SECRET]", text)
+    return re.sub(r"xox[baprs]-[A-Za-z0-9-]+", "[REDACTED_SECRET]", str(text))
 
 
-def normalize_event_dict(raw: Dict[str, Any]) -> EventRecord:
+def normalize_event_dict(
+    raw: Dict[str, Any], default_incident_id: Optional[str] = None
+) -> EventRecord:
     """Normalizes an arbitrary event dictionary into a validated EventRecord."""
+    if not isinstance(raw, dict):
+        raise ValueError("Event record must be a dictionary")
+
     data = dict(raw)
-    
-    # Normalize source_type
+
+    # 1. Validate required source_id
+    source_id = data.get("source_id")
+    if not source_id or not str(source_id).strip():
+        raise ValueError("Missing required field: source_id")
+
+    # 2. Validate required incident_id
+    incident_id = data.get("incident_id") or default_incident_id
+    if not incident_id or not str(incident_id).strip():
+        raise ValueError("Missing required field: incident_id")
+    data["incident_id"] = incident_id
+
+    # 3. Validate timestamp
+    raw_ts = data.get("timestamp")
+    if raw_ts is None:
+        raw_ts = data.get("ts") if "ts" in data else (data.get("fired_at") or data.get("created_at"))
+    if raw_ts is None or (isinstance(raw_ts, str) and not raw_ts.strip()):
+        raise ValueError("Missing required timestamp")
+
+    try:
+        parsed_dt = parse_to_utc_datetime(raw_ts)
+        data["timestamp"] = parsed_dt
+    except Exception as exc:
+        raise ValueError(f"Invalid timestamp: {raw_ts}") from exc
+
+    # 4. Infer and normalize source_type
     raw_type = str(data.get("source_type", "")).lower()
-    if "slack" in raw_type or "chat" in raw_type:
+    if raw_type in ["slack", "chat"] or "speaker" in data or "channel" in data:
         st = SourceType.SLACK
-    elif "alert" in raw_type:
+    elif raw_type in ["alert", "monitoring_alert"] or "monitor" in data or "metric" in data:
         st = SourceType.MONITORING_ALERT
-    elif "deploy" in raw_type:
+    elif raw_type in ["deploy", "deployment_log"] or "deployer" in data or "version" in data:
         st = SourceType.DEPLOYMENT_LOG
     else:
         st = SourceType.SLACK
     data["source_type"] = st
 
-    # Redact raw content
-    if "raw_content" in data and isinstance(data["raw_content"], str):
-        data["raw_content"] = redact_secrets(data["raw_content"])
-    elif "text" in data and isinstance(data["text"], str):
-        data["raw_content"] = redact_secrets(data["text"])
-    elif "message" in data and isinstance(data["message"], str):
-        data["raw_content"] = redact_secrets(data["message"])
+    # 5. Author or actor
+    actor = (
+        data.get("author_or_actor")
+        or data.get("speaker")
+        or data.get("deployer")
+        or data.get("monitor")
+        or data.get("actor")
+        or data.get("user")
+        or "system"
+    )
+    data["author_or_actor"] = actor
 
-    # Fallback summary
+    # 6. Channel or service
+    channel_svc = (
+        data.get("channel_or_service")
+        or data.get("channel")
+        or data.get("service")
+        or "general"
+    )
+    data["channel_or_service"] = channel_svc
+
+    # 7. Raw content & secret redaction
+    content = (
+        data.get("raw_content")
+        or data.get("message")
+        or data.get("text")
+        or data.get("content")
+        or data.get("summary")
+        or ""
+    )
+    data["raw_content"] = redact_secrets(content)
+
+    # 8. Summary
     if not data.get("summary"):
-        data["summary"] = data.get("raw_content", "")[:120]
+        data["summary"] = data["raw_content"][:120] if data["raw_content"] else f"{st.value} event"
+
+    # 9. Structured payload capture
+    core_keys = {
+        "source_id", "incident_id", "timestamp", "source_type",
+        "author_or_actor", "channel_or_service", "summary",
+        "raw_content", "embedding_text", "embedding", "tags",
+        "created_at", "structured_payload"
+    }
+    payload = dict(data.get("structured_payload") or {})
+    for k, v in data.items():
+        if k not in core_keys and k not in ["ts", "speaker", "deployer", "monitor", "channel", "service", "message", "text"]:
+            payload[k] = v
+    data["structured_payload"] = payload
+
+    # 10. Canonical embedding text
+    if not data.get("embedding_text"):
+        src_tag = st.value.upper()
+        ts_iso = format_utc_iso(data["timestamp"])
+        data["embedding_text"] = f"[{src_tag}] [{ts_iso}] {channel_svc} ({actor}): {data['summary']}"
 
     return EventRecord.model_validate(data)
-
-
-def parse_incident_data(data: Union[List[Dict[str, Any]], str]) -> List[EventRecord]:
-    """Parses a list of event dictionaries or a JSON string into validated EventRecords."""
-    if isinstance(data, str):
-        raw_list = json.loads(data)
-    else:
-        raw_list = data
-
-    return [normalize_event_dict(item) for item in raw_list]
 
 
 def parse_deploy_log(content: str, incident_id: str, source_id: str, filename: str) -> List[NormalizedEvent]:
@@ -91,7 +161,7 @@ def parse_deploy_log(content: str, incident_id: str, source_id: str, filename: s
     events = []
     lines = content.splitlines()
     edt_tz = timezone(timedelta(hours=-4))
-    
+
     line_pattern = re.compile(
         r"^\[(?P<dt>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) EDT\]\s*\[(?P<lvl>\w+)\]\s*\[(?P<logger>[\w\-]+)\]\s*(?P<msg>.*)$"
     )
@@ -101,22 +171,20 @@ def parse_deploy_log(content: str, incident_id: str, source_id: str, filename: s
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
-        
+
         match = line_pattern.match(line)
         if not match:
             continue
-        
+
         dt_str = match.group("dt")
         logger_name = match.group("logger")
         msg = match.group("msg")
 
-        # Convert EDT to UTC
         naive_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
         aware_dt = naive_dt.replace(tzinfo=edt_tz)
         utc_dt = aware_dt.astimezone(timezone.utc)
         utc_iso = utc_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        # Extract structured properties
         props = {}
         for part in msg.split("|"):
             if ":" in part:
@@ -242,12 +310,10 @@ def chunk_events(events: List[NormalizedEvent], incident_id: str) -> List[ChunkR
     chunks = []
     chunk_counter = 1
 
-    # Separate events by source type
     deploy_events = [e for e in events if e.source_type == "deploy"]
     alert_events = [e for e in events if e.source_type == "alert"]
     chat_events = [e for e in events if e.source_type == "chat"]
 
-    # 1. Deploy chunks (1:1)
     for ev in deploy_events:
         chunk = ChunkRecord(
             chunk_id=f"CHK-{chunk_counter:04d}",
@@ -262,7 +328,6 @@ def chunk_events(events: List[NormalizedEvent], incident_id: str) -> List[ChunkR
         chunks.append(chunk)
         chunk_counter += 1
 
-    # 2. Alert chunks (1:1)
     for ev in alert_events:
         chunk = ChunkRecord(
             chunk_id=f"CHK-{chunk_counter:04d}",
@@ -277,9 +342,7 @@ def chunk_events(events: List[NormalizedEvent], incident_id: str) -> List[ChunkR
         chunks.append(chunk)
         chunk_counter += 1
 
-    # 3. Chat chunks (Conversation windows: <= 10 messages OR <= 10 minutes span)
     if chat_events:
-        # Sort chat events chronologically
         sorted_chat = sorted(chat_events, key=lambda x: x.timestamp_utc)
         current_group: List[NormalizedEvent] = []
         current_start_dt: Optional[datetime] = None
@@ -295,11 +358,9 @@ def chunk_events(events: List[NormalizedEvent], incident_id: str) -> List[ChunkR
             span_seconds = (ev_dt - current_start_dt).total_seconds()
             is_same_channel = (ev.channel == current_group[0].channel)
 
-            # Check window boundaries: max 10 messages OR max 10 minutes (600 seconds)
             if len(current_group) < 10 and span_seconds <= 600 and is_same_channel:
                 current_group.append(ev)
             else:
-                # Flush existing chunk
                 chunk_text = "\n".join(
                     f"[{m.channel}] {m.actor} ({m.timestamp_utc}): {m.text}" for m in current_group
                 )
@@ -319,7 +380,6 @@ def chunk_events(events: List[NormalizedEvent], incident_id: str) -> List[ChunkR
                 current_group = [ev]
                 current_start_dt = ev_dt
 
-        # Flush final chat chunk
         if current_group:
             chunk_text = "\n".join(
                 f"[{m.channel}] {m.actor} ({m.timestamp_utc}): {m.text}" for m in current_group
@@ -342,10 +402,10 @@ def chunk_events(events: List[NormalizedEvent], incident_id: str) -> List[ChunkR
 
 
 class IngestionEngine:
-    """Manages document importing, deduplication via file_hash, normalization, and chunking."""
+    """Manages the full multi-file ingestion pipeline."""
 
     def __init__(self):
-        self.sources: Dict[str, SourceDocument] = {}  # keyed by file_hash
+        self.sources: Dict[str, SourceDocument] = {}
         self.events: List[NormalizedEvent] = []
         self.chunks: List[ChunkRecord] = []
 
@@ -414,3 +474,119 @@ class IngestionEngine:
             "events": self.events,
             "chunks": self.chunks,
         }
+
+
+def parse_incident_data(
+    data_input: Union[str, Path, list[dict[str, Any]], dict[str, Any]],
+    default_incident_id: Optional[str] = None,
+    attach_embeddings: bool = False,
+) -> list[EventRecord]:
+    """Parse JSON file, JSON string, JSONL, or python dicts into validated EventRecords.
+
+    Ensures chronological stability and uniqueness of source_id within an incident.
+
+    Args:
+        data_input: File path, string content, raw list of dicts, or dictionary with 'events'.
+        default_incident_id: Incident ID fallback.
+        attach_embeddings: If True, attempt to generate embeddings for events.
+
+    Returns:
+        List of validated canonical EventRecords.
+
+    Raises:
+        ValueError: On parsing errors or duplicate source IDs.
+    """
+    raw_records: list[dict[str, Any]] = []
+
+    if isinstance(data_input, Path) or (
+        isinstance(data_input, str)
+        and (data_input.endswith(".json") or data_input.endswith(".jsonl"))
+    ):
+        path = Path(str(data_input))
+        if not path.exists():
+            raise FileNotFoundError(f"Incident data file not found: {path}")
+        content = path.read_text(encoding="utf-8").strip()
+        if not content:
+            return []
+        if path.suffix == ".jsonl":
+            for line_no, line in enumerate(content.splitlines(), start=1):
+                line = line.strip()
+                if line:
+                    try:
+                        raw_records.append(json.loads(line))
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(f"Invalid JSON on line {line_no}: {exc}") from exc
+        else:
+            try:
+                parsed = json.loads(content)
+                if isinstance(parsed, list):
+                    raw_records = parsed
+                elif isinstance(parsed, dict) and "events" in parsed:
+                    default_incident_id = parsed.get("incident_id") or default_incident_id
+                    raw_records = parsed["events"]
+                elif isinstance(parsed, dict):
+                    raw_records = [parsed]
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSON file {path}: {exc}") from exc
+
+    elif isinstance(data_input, str):
+        content = data_input.strip()
+        if not content:
+            return []
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, list):
+                raw_records = parsed
+            elif isinstance(parsed, dict) and "events" in parsed:
+                default_incident_id = parsed.get("incident_id") or default_incident_id
+                raw_records = parsed["events"]
+            elif isinstance(parsed, dict):
+                raw_records = [parsed]
+        except json.JSONDecodeError:
+            for line_no, line in enumerate(content.splitlines(), start=1):
+                line = line.strip()
+                if line:
+                    try:
+                        raw_records.append(json.loads(line))
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(f"Invalid JSON/JSONL at line {line_no}: {exc}") from exc
+
+    elif isinstance(data_input, list):
+        raw_records = data_input
+
+    elif isinstance(data_input, dict):
+        if "events" in data_input and isinstance(data_input["events"], list):
+            default_incident_id = data_input.get("incident_id") or default_incident_id
+            raw_records = data_input["events"]
+        else:
+            raw_records = [data_input]
+
+    else:
+        raise ValueError(f"Unsupported data input type: {type(data_input).__name__}")
+
+    # Normalize each record
+    normalized_records: list[EventRecord] = []
+    seen_ids: set[tuple[str, str]] = set()
+
+    for rec in raw_records:
+        norm = normalize_event_dict(rec, default_incident_id=default_incident_id)
+        key = (norm.incident_id, norm.source_id)
+        if key in seen_ids:
+            raise ValueError(
+                f"Duplicate source_id '{norm.source_id}' in incident '{norm.incident_id}'"
+            )
+        seen_ids.add(key)
+        normalized_records.append(norm)
+
+    # Optionally attach embeddings if requested
+    if attach_embeddings and generate_event_embeddings is not None and normalized_records:
+        try:
+            embeddings = generate_event_embeddings(normalized_records)
+            for event, emb in zip(normalized_records, embeddings):
+                event.embedding = emb
+        except EmbeddingError as exc:
+            logger.warning(f"Failed to attach embeddings during ingestion: {exc}")
+        except Exception as exc:
+            logger.warning(f"Unexpected error attaching embeddings: {exc}")
+
+    return normalized_records

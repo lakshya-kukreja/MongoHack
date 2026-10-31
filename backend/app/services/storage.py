@@ -172,6 +172,65 @@ class StorageService:
             self._memory_events[key] = event
         return len(events)
 
+    def get_event_documents(self, incident_id: Optional[str] = None) -> list[dict[str, Any]]:
+        """Return raw event documents for embedding audits and backfills.
+
+        This is read-only and intentionally keeps MongoDB's ``_id`` so callers
+        can verify identity preservation; update operations must not replace it.
+
+        Args:
+            incident_id: Optional incident filter. When omitted, all events are returned.
+
+        Returns:
+            Raw event documents from MongoDB, or serialized in-memory events.
+        """
+        if self.collection is not None:
+            query: dict[str, Any] = {"incident_id": incident_id} if incident_id else {}
+            return list(self.collection.find(query))
+
+        documents: list[dict[str, Any]] = []
+        for event in self._memory_events.values():
+            if incident_id and event.incident_id != incident_id:
+                continue
+            documents.append(event.model_dump())
+        return documents
+
+    def update_event_embedding(
+        self,
+        incident_id: str,
+        source_id: str,
+        embedding: list[float],
+    ) -> bool:
+        """Persist only the ``embedding`` field for an existing event.
+
+        Uses a targeted ``$set`` update so ``_id``, source metadata, timestamps,
+        and raw content are never replaced. Returns True when a document matched.
+
+        Args:
+            incident_id: Incident grouping key.
+            source_id: Stable event identifier within the incident.
+            embedding: Validated embedding vector to persist.
+        """
+        if self.collection is not None:
+            try:
+                result = self.collection.update_one(
+                    {"incident_id": incident_id, "source_id": source_id},
+                    {"$set": {"embedding": embedding}},
+                )
+                return getattr(result, "matched_count", 0) > 0
+            except Exception as exc:
+                logger.error(
+                    f"MongoDB embedding update failed for "
+                    f"({incident_id}, {source_id}): {exc}"
+                )
+                raise
+
+        event = self._memory_events.get((incident_id, source_id))
+        if event is None:
+            return False
+        event.embedding = embedding
+        return True
+
     def incident_exists(self, incident_id: str) -> bool:
         """Check if an incident exists in storage."""
         if self.collection is not None:

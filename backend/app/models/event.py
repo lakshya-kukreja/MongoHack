@@ -154,3 +154,43 @@ class HealthResponse(BaseModel):
     status: str
     database: str
     version: str = "1.0.0"
+
+
+class QueryRequest(BaseModel):
+    """Request payload for incident investigation query."""
+
+    query: str = Field(..., min_length=1, description="Investigation question")
+    limit: int = Field(default=10, ge=1, le=50, description="Maximum number of events to retrieve")
+    start_time: Optional[str] = Field(default=None, description="Optional start time filter")
+    end_time: Optional[str] = Field(default=None, description="Optional end time filter")
+
+
+class CitationRecord(BaseModel):
+    """Structured citation to a source event."""
+
+    source_id: str
+    source_type: str
+    timestamp: str
+    author_or_actor: str
+    channel_or_service: str
+    summary: str
+    snippet: str
+
+
+class RetrievedEventSummary(BaseModel):
+    """Summary of a retrieved event with relevance score."""
+
+    source_id: str
+    timestamp: str
+    source_type: str
+    summary: str
+    score: float = 0.0
+
+
+class QueryResponse(BaseModel):
+    """Response payload for incident investigation query."""
+
+    answer: str
+    citations: list[CitationRecord] = Field(default_factory=list)
+    unverified_citations: list[str] = Field(default_factory=list)
+    retrieved_events: list[RetrievedEventSummary] = Field(default_factory=list)

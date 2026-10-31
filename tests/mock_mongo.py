@@ -46,6 +46,14 @@ class MockCursor:
         return list(self)[index]
 
 
+class MockUpdateResult:
+    """Minimal PyMongo UpdateResult-compatible object."""
+
+    def __init__(self, matched_count: int, modified_count: int):
+        self.matched_count = matched_count
+        self.modified_count = modified_count
+
+
 class MockCollection:
     """Mock PyMongo Collection storing documents in memory with index support."""
 
@@ -116,6 +124,18 @@ class MockCollection:
             if "_id" not in new_doc:
                 new_doc["_id"] = f"mock_{len(self.docs) + 1}"
             self.docs.append(new_doc)
+
+    def update_one(self, filter: dict[str, Any], update: dict[str, Any]) -> MockUpdateResult:
+        for i, existing in enumerate(self.docs):
+            if self._matches(existing, filter):
+                updated_doc = deepcopy(existing)
+                set_fields = update.get("$set", {})
+                for key, value in set_fields.items():
+                    updated_doc[key] = deepcopy(value)
+                modified = 1 if updated_doc != existing else 0
+                self.docs[i] = updated_doc
+                return MockUpdateResult(matched_count=1, modified_count=modified)
+        return MockUpdateResult(matched_count=0, modified_count=0)
 
     def bulk_write(self, operations: list[Any], ordered: bool = True) -> None:
         for op in operations:

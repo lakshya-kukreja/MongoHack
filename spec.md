@@ -21,22 +21,22 @@ During an outage, engineering teams produce heterogeneous, fragmented data acros
 
 ---
 
-## 2. System Architecture
+## 2. System Architecture & Implementation Status
 
 ```
-[Raw Event Records: JSON / JSONL]
+[Raw Event Records: JSON / JSONL] ◄── [IMPLEMENTED: data/incidents/inc_2026_042.json (17 events)]
   (Slack, Alerts, Deployments)
                  │
                  ▼
       ┌─────────────────────┐
-      │  Ingestion Engine   │ ◄── Schema validation (Pydantic)
+      │  Ingestion Engine   │ ◄── [IMPLEMENTED: backend/app/services/ingestion.py]
       └──────────┬──────────┘
                  │
-                 ├── Generates Embeddings (Embedding Provider: text-embedding-3-small or Gemini)
+                 ├── Generates Embeddings (Gemini default / OpenAI supported) ◄── [BE-106, BE-113: embeddings.py]
                  │
                  ▼
       ┌──────────────────────────────────────────────────┐
-      │            MongoDB Atlas Database                │
+      │            MongoDB Atlas Database                │ ◄── [IMPLEMENTED: storage.py, atlas_vector_index.json]
       │  Collection: `incident_events`                   │
       │  - Deterministic Metadata (timestamp, source_id) │
       │  - Raw Content & Normalized Payload              │
@@ -48,22 +48,23 @@ During an outage, engineering teams produce heterogeneous, fragmented data acros
       │                                      │
       ▼                                      ▼
 ┌───────────────────────────┐  ┌───────────────────────────────────┐
-│   Deterministic Timeline  │  │   Vector Search & Filter Engine   │
+│   Deterministic Timeline  │  │   Vector Search & Filter Engine   │ ◄── [PLANNED: BE-107: retrieval.py]
 │   Engine (Time range,     │  │   ($vectorSearch + Metadata       │
 │   Incident ID, Actor/Type)│  │    pre-filters on Incident/Time)  │
-└─────────────┬─────────────┘  └─────────────────┬─────────────────┘
+│   [IMPLEMENTED]           │  └─────────────────┬─────────────────┘
+└─────────────┬─────────────┘                    │
               │                                  │
               │   ┌──────────────────────────────┘
               ▼   ▼
       ┌─────────────────────────────────────┐
-      │ Grounded Context Assembly           │
+      │ Grounded Context Assembly           │ ◄── [PLANNED: BE-108: generator.py]
       │ - Formatted Chronological Evidence  │
       │ - Source ID reference table         │
       └──────────────────┬──────────────────┘
                          │
                          ▼
       ┌─────────────────────────────────────┐
-      │ LLM Generation Engine               │
+      │ LLM Generation Engine               │ ◄── [PLANNED: BE-108: generator.py]
       │ - Strict Grounding Prompt           │
       │ - Mandatory [SOURCE_ID] Citations   │
       │ - Missing/Contradictory checks      │
@@ -71,54 +72,74 @@ During an outage, engineering teams produce heterogeneous, fragmented data acros
                          │
                          ▼
       ┌─────────────────────────────────────┐
-      │ Citation Validator & Post-Processor │
+      │ Citation Validator & Post-Processor │ ◄── [PLANNED: BE-108: generator.py]
       │ - Verifies citations exist in ctx   │
       │ - Links IDs to full event metadata  │
       └──────────────────┬──────────────────┘
                          │
                          ▼
       ┌─────────────────────────────────────┐
-      │ FastAPI REST API                    │
+      │ FastAPI REST API                    │ ◄── [PARTIALLY IMPLEMENTED: backend/app/api/incidents.py]
+      │ - Health, Ingest, Timeline, Events  │     (Query endpoint PLANNED in BE-109)
       └──────────────────┬──────────────────┘
                          │
                          ▼
       ┌─────────────────────────────────────┐
-      │ React + TypeScript + Vite Frontend  │
+      │ React + TypeScript + Vite Frontend  │ ◄── [IMPLEMENTED on frontend branch: Timeline, Chat, Drawer]
       │ - Interactive Timeline View         │
       │ - Investigation Chat with Citations │
       │ - Deep-dive Event Inspector Drawer  │
       └─────────────────────────────────────┘
 ```
 
+### Component Status Matrix
+
+| Component | Module / Path | Owner | Status | Details |
+|---|---|---|---|---|
+| **Pydantic Models** | `backend/app/models/event.py` | Person 1 | **IMPLEMENTED** | `EventRecord`, `TimelineResponse`, `IncidentSummary`, `IngestRequest`, `IngestResponse`, `HealthResponse`. |
+| **Ingestion Engine** | `backend/app/services/ingestion.py` | Person 1 | **IMPLEMENTED** | Heterogeneous normalization for Slack, Alerts, and Deployments. Enforces unique `source_id` and UTC datetimes. |
+| **Storage Service** | `backend/app/services/storage.py` | Person 1 | **IMPLEMENTED** | MongoDB Atlas CRUD, index creation, in-memory mock fallback, duplicate handling, incident listing aggregation. |
+| **Timeline Engine** | `backend/app/services/timeline.py` | Person 1 | **IMPLEMENTED** | Pure deterministic sorting ascending by timestamp, inclusive time-windowing, and source-type filtering. |
+| **REST API (Core)** | `backend/app/api/incidents.py` | Person 1 | **IMPLEMENTED** | `/api/health`, `/api/incidents/ingest`, `/api/incidents`, `/api/incidents/{id}/timeline`, `/api/incidents/{id}/events/{source_id}`. |
+| **Vector Embeddings** | `backend/app/services/embeddings.py` | Person 1 | **DONE (BE-106, BE-113)** | Gemini `gemini-embedding-2` (1536 dims) by default; OpenAI `text-embedding-3-small` remains supported. Batching, dimension validation, and rate limiting included. |
+| **Atlas Vector Search** | `backend/app/services/retrieval.py` | Person 1 | **PLANNED (BE-107)** | `$vectorSearch` pipeline execution with metadata pre-filtering by `incident_id`. |
+| **RAG Generator** | `backend/app/services/generator.py` | Person 1 | **PLANNED (BE-108)** | Strict grounding prompt formulation, citation extraction, validation against retrieved IDs, uncertainty handling. |
+| **Query Endpoint** | `POST /api/incidents/{id}/query` | Person 1 | **PLANNED (BE-109)** | Investigation question endpoint returning `QueryResponse` with structured citations. |
+| **Frontend UI** | `frontend/src/` | Person 2 | **IMPLEMENTED (branch)** | TanStack Router, TimelineView, ChatInterface, CitationChip, EventDrawer, DashboardView, Import, mockApi. |
+| **Frontend Test Suite** | `frontend/src/test/` | Person 2 | **IN PROGRESS (branch)** | Mock API and route matching unit tests. Full build and component test verification pending dependencies. |
+| **Golden Incident Data** | `data/incidents/inc_2026_042.json` | Person 3 | **IMPLEMENTED** | 17 verified events covering incident lifecycle from deploy to recovery and unproven hypothesis. |
+| **Benchmark Cases** | `data/eval_cases.json` | Person 3 | **IMPLEMENTED** | 6 golden evaluation cases with expected source IDs, acceptable supplementary IDs, and negative query. |
+| **Evaluation Harness** | `tests/test_retrieval_eval.py` | Person 3 | **PLANNED (DATA-303)** | Automated benchmark runner computing Hit Rate@K, MRR, latency, and citation precision. |
+
 ---
 
 ## 3. Incident Event Schema & Citation Contract
 
-### 3.1 MongoDB Document & Pydantic Schema
+### 3.1 MongoDB Document & Pydantic Schema `[IMPLEMENTED]`
 
-Every event across Slack, monitoring, and deployments is normalized into a unified schema:
+Every event across Slack, monitoring, and deployments is normalized into a unified schema defined in `backend/app/models/event.py`:
 
 ```json
 {
   "_id": "ObjectId('...')",
   "source_id": "ALERT-201",
   "incident_id": "INC-2026-042",
-  "timestamp": "2026-10-30T14:05:00Z",
+  "timestamp": "2026-10-30T14:02:00Z",
   "source_type": "monitoring_alert",
   "author_or_actor": "datadog-monitor",
   "channel_or_service": "checkout-service",
-  "summary": "P99 latency breach on /checkout > 2000ms",
-  "raw_content": "CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms). Triggered by rule LatencyAlert-Prod.",
+  "summary": "CRITICAL: P99 latency breach on /checkout > 2000ms",
+  "raw_content": "CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms). Triggered by rule LatencyAlert-Prod on endpoint /api/v1/checkout.",
   "structured_payload": {
-    "metric_name": "http_req_duration_p99",
+    "metric": "p99_latency_ms",
     "threshold": 2000,
-    "value": 2840,
+    "measured_value": 2840,
     "severity": "CRITICAL",
-    "environment": "production"
+    "endpoint": "/api/v1/checkout"
   },
-  "embedding_text": "[ALERT] [2026-10-30T14:05:00Z] checkout-service (datadog-monitor): CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms). Triggered by rule LatencyAlert-Prod.",
+  "embedding_text": "[ALERT] [2026-10-30T14:02:00Z] checkout-service (datadog-monitor): CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms). Triggered by rule LatencyAlert-Prod on endpoint /api/v1/checkout.",
   "embedding": [0.0124, -0.0451, "...", 0.0892],
-  "tags": ["latency", "checkout", "alert", "sev1"],
+  "tags": ["alert", "latency", "critical", "checkout"],
   "created_at": "2026-10-30T18:00:00Z"
 }
 ```
@@ -126,37 +147,39 @@ Every event across Slack, monitoring, and deployments is normalized into a unifi
 #### Field Specifications:
 - `source_id` (string, required, unique within incident): Human-readable stable reference code (e.g. `SLACK-301`, `ALERT-201`, `DEPLOY-101`).
 - `incident_id` (string, required, indexed): Incident grouping key (e.g. `INC-2026-042`).
-- `timestamp` (string / datetime, required, indexed): Canonical UTC timestamp in ISO-8601 format (`YYYY-MM-DDTHH:MM:SSZ`).
-- `source_type` (string, required): One of `"slack"`, `"monitoring_alert"`, `"deployment_log"`.
+- `timestamp` (datetime, required, indexed): Canonical UTC timestamp in ISO-8601 format (`YYYY-MM-DDTHH:MM:SSZ`).
+- `source_type` (string enum, required): One of `"slack"`, `"monitoring_alert"`, `"deployment_log"`.
 - `author_or_actor` (string, required): Username, bot name, or deploying engineer/system.
-- `channel_or_service` (string, required): Slack channel (e.g. `#incidents-prod`) or affected microservice/repo (e.g. `auth-service`, `payment-v2`).
+- `channel_or_service` (string, required): Slack channel (e.g. `#incidents-prod`) or affected microservice/repo (e.g. `checkout-service`).
 - `summary` (string, required): Short one-line synopsis used for quick timeline rendering.
 - `raw_content` (string, required): Full unaltered text of the message, alert payload, or deployment description.
 - `structured_payload` (dict, optional): Strongly-typed attributes (error codes, commit hashes, latency numbers, cluster names).
 - `embedding_text` (string, required): Canonical formatted representation used to compute vector embeddings.
-- `embedding` (list[float], required): Vector embedding representation (1536 dims for OpenAI `text-embedding-3-small`, or 768 dims for Gemini).
+- `embedding` (list[float], optional/required for search): Vector embedding representation. Must match the Atlas vector index: 1536 dims. Gemini `gemini-embedding-2`/`gemini-embedding-001` are requested at 1536 dims via `embedContentConfig.outputDimensionality` (the top-level `outputDimensionality` field is deprecated); OpenAI `text-embedding-3-small` outputs 1536 dims natively. `gemini-embedding-001` output below its native 3072 dims is L2-normalized by the client, as required by the Gemini API guidance.
 - `tags` (list[string], optional): Categorical tags for hybrid/faceted search.
+- `created_at` (datetime, optional): Ingestion timestamp in UTC.
 
 ---
 
-### 3.2 Citation Contract
+### 3.2 Citation Contract `[PLANNED in BE-108; SIMULATED in FE mockApi.ts]`
 
 To prevent hallucinated citations, the system enforces a strict citation lifecycle:
 
 1. **Context Formulation**:
    Each retrieved event passed to the LLM prompt is labeled with an explicit delimiter:
-   ```
+   ```text
    [EVIDENCE RECORD ALERT-201]
    Source ID: ALERT-201
-   Timestamp: 2026-10-30T14:05:00Z
+   Timestamp: 2026-10-30T14:02:00Z
    Type: monitoring_alert | Service: checkout-service | Actor: datadog-monitor
-   Content: CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms).
+   Summary: CRITICAL: P99 latency breach on /checkout > 2000ms
+   Content: CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms). Triggered by rule LatencyAlert-Prod on endpoint /api/v1/checkout.
    ```
 
 2. **LLM Generation Rule**:
    - The LLM must append citation markers like `[ALERT-201]` directly after claims derived from that event.
    - If a claim draws from multiple records, cite all relevant IDs: `[ALERT-201] [SLACK-301]`.
-   - Never cite a source ID that is not listed in the retrieved context.
+   - NEVER cite a source ID that is not listed in the retrieved context.
    - If no retrieved evidence answers the query, state: `"Based on the retrieved incident records, there is insufficient evidence to answer this question."` and cite nothing.
 
 3. **Backend Citation Validation & Structure**:
@@ -167,7 +190,7 @@ To prevent hallucinated citations, the system enforces a strict citation lifecyc
    - Return structured citation objects alongside the text:
      ```json
      {
-       "answer": "The initial alert triggered at 14:02:00Z when checkout latency spiked to 2840ms [ALERT-201]. Alice first acknowledged this in Slack four minutes later [SLACK-301].",
+       "answer": "The initial alert triggered at 14:02:00Z when checkout latency spiked to 2840ms [ALERT-201]. Alice first acknowledged this in Slack two minutes later [SLACK-301].",
        "citations": [
          {
            "source_id": "ALERT-201",
@@ -184,8 +207,8 @@ To prevent hallucinated citations, the system enforces a strict citation lifecyc
            "timestamp": "2026-10-30T14:04:10Z",
            "author_or_actor": "alice.dev",
            "channel_or_service": "#incidents-prod",
-           "summary": "Alice acknowledges checkout errors",
-           "snippet": "Seeing an alert for checkout latency. Investigating error rates on Stripe webhooks and checkout endpoint."
+           "summary": "Alice notices checkout latency alert",
+           "snippet": "Seeing an alert for checkout latency. Investigating error rates on Stripe webhooks."
          }
        ],
        "unverified_citations": []
@@ -194,14 +217,15 @@ To prevent hallucinated citations, the system enforces a strict citation lifecyc
 
 4. **Frontend Interaction**:
    - The UI replaces `[ALERT-201]` tokens with an interactive clickable badge `<CitationChip id="ALERT-201" />`.
+   - Unverified citations are rendered with a warning badge and explanatory tooltip.
    - Clicking the badge scrolls to and highlights that record on the timeline and/or opens the Event Inspector Drawer with full raw details and payload metrics.
 
 ---
 
-## 4. MongoDB Atlas Vector Search Specification
+## 4. MongoDB Atlas Vector Search & Deterministic Timeline Specification
 
-### 4.1 Vector Index Definition
-The collection `incident_events` requires an Atlas Vector Search index (e.g. named `vector_index`).
+### 4.1 Vector Index Definition `[IMPLEMENTED: backend/atlas_vector_index.json]`
+The collection `incident_events` requires an Atlas Vector Search index named `vector_index`:
 
 ```json
 {
@@ -228,7 +252,7 @@ The collection `incident_events` requires an Atlas Vector Search index (e.g. nam
 }
 ```
 
-### 4.2 Retrieval Query Pattern
+### 4.2 Retrieval Query Pattern `[PLANNED: BE-107]`
 To guarantee semantic relevance while restricting to the target incident and timeframe:
 
 ```python
@@ -263,8 +287,8 @@ pipeline = [
 ]
 ```
 
-### 4.3 Deterministic Timeline Query Pattern & Date-Filtering Behavior
-When rendering the incident chronology, vector search is **not** used. Instead, standard indexed sorting guarantees chronological truth:
+### 4.3 Deterministic Timeline Query Pattern & Date-Filtering Behavior `[IMPLEMENTED]`
+When rendering the incident chronology, vector search is **never** used. Instead, standard indexed sorting guarantees chronological truth:
 
 ```python
 cursor = db.incident_events.find(
@@ -287,7 +311,7 @@ cursor = db.incident_events.find(
 
 ---
 
-## 5. RAG Engine & Prompting Strategy
+## 5. RAG Engine & Prompting Strategy `[PLANNED in BE-108]`
 
 ### 5.1 System Prompt
 ```text
@@ -303,39 +327,48 @@ RULES:
    - Clearly distinguish proven facts (supported by metrics/logs/code changes) from human hypotheses or unverified conjectures in chat.
    - If an engineer speculated something was the root cause, but no metrics confirm it, explicitly label it as "Unverified Hypothesis by [Actor] ([SOURCE_ID])".
 7. CONTRADICTIONS: If two pieces of evidence contradict each other, highlight the discrepancy explicitly.
-8. INSUFFICIENT EVIDENCE: If the records do not contain enough evidence to answer a question, state: "Based on the retrieved records, there is insufficient evidence to determine [question]."
+8. INSUFFICIENT EVIDENCE: If the records do not contain enough evidence to answer a question, state: "Based on the retrieved incident records, there is insufficient evidence to answer this question."
 ```
 
 ### 5.2 Retrieval Augmentation Flow
 1. **User asks**: *"What was the first sign of trouble and who responded?"*
-2. **Embedding**: Generate embedding for user question.
+2. **Embedding**: Generate embedding for user question via `embeddings.py`.
 3. **Retrieval**: Query `$vectorSearch` with pre-filter `incident_id = "INC-2026-042"`.
 4. **Context Construction**:
    - Format retrieved records in chronological order.
    - Append reference ID list.
 5. **Generation**: LLM processes system prompt + context + user query.
-6. **Validation**: Check returned text for citation conformity against retrieved `source_id`s.
+6. **Validation**: Check returned text for citation conformity against retrieved `source_id`s, strip hallucinations, return structured citations.
+
+### 5.3 Error Handling, Timeouts & Upstream Resilience `[PLANNED: BE-106B, BE-108D]`
+- **Upstream Timeouts**: Direct API calls to OpenAI or Gemini must configure explicit timeout limits (10 seconds for embeddings, 30 seconds for LLM generation). Upon timeout, the service raises an `HTTPException(status_code=504, detail="Upstream AI provider timed out")`.
+- **Rate Limits (HTTP 429) & Provider Failures (HTTP 5xx)**: Caught gracefully and mapped to `HTTPException(status_code=503, detail="Upstream AI provider unavailable or rate-limited")`. Raw stack traces or secret keys must never leak to the client.
+- **Negative & Insufficient Evidence Guarantees**: When retrieved evidence cannot answer the question or query matches negative evaluation criteria (e.g. EVAL-006), the response is HTTP 200 with `answer = "Based on the retrieved incident records, there is insufficient evidence to answer this question."`, `citations = []`, and `unverified_citations = []`.
+- **Deterministic Offline Testing**: All test suites in `tests/` operate with mock embedding vectors and mock LLM generation responses, enabling rapid, 100% offline CI verification without consuming API tokens or requiring network access.
+- **Live Integration & Demo Modes**: An opt-in live test suite and demonstration script (`scripts/demo_rag.py`) conditionally run against real cloud credentials when `OPENAI_API_KEY` or `GEMINI_API_KEY` and `MONGODB_URI` are supplied in `.env`.
 
 ---
 
-## 6. REST API Endpoints Specification & Frontend Contract
+## 6. REST API Endpoints Specification & Contracts
 
 ### 6.1 Endpoints Overview
 
-| Method | Endpoint | Description | Request | Response |
-|---|---|---|---|---|
-| `GET` | `/api/health` | Healthcheck & DB status | None | `HealthResponse` |
-| `POST` | `/api/incidents/ingest` | Ingest JSON array of incident records | `IngestRequest` | `IngestResponse` |
-| `GET` | `/api/incidents` | List all available incidents with summary | None | `list[IncidentSummary]` |
-| `GET` | `/api/incidents/{incident_id}/timeline` | Fetch deterministic chronological timeline | Query params: `start_time`, `end_time`, `source_type` | `TimelineResponse` |
-| `POST` | `/api/incidents/{incident_id}/query` | Ask an investigation question (RAG) | `QueryRequest` | `QueryResponse` |
-| `GET` | `/api/incidents/{incident_id}/events/{source_id}` | Retrieve single event detail | Path params | `EventRecord` |
+| Method | Endpoint | Description | Status | Request | Response |
+|---|---|---|---|---|---|
+| `GET` | `/api/health` | Healthcheck & DB status | **IMPLEMENTED** | None | `HealthResponse` |
+| `POST` | `/api/incidents/ingest` | Ingest JSON array of incident records | **IMPLEMENTED** | `IngestRequest` | `IngestResponse` |
+| `GET` | `/api/incidents` | List all available incidents with summary | **IMPLEMENTED** | None | `list[IncidentSummary]` |
+| `GET` | `/api/incidents/{incident_id}/timeline` | Fetch deterministic chronological timeline | **IMPLEMENTED** | Query params: `start_time`, `end_time`, `source_type` | `TimelineResponse` |
+| `GET` | `/api/incidents/{incident_id}/events/{source_id}` | Retrieve single event detail | **IMPLEMENTED** | Path params | `EventRecord` |
+| `POST` | `/api/incidents/{incident_id}/query` | Ask an investigation question (RAG) | **PLANNED (BE-109)** | `QueryRequest` | `QueryResponse` |
+| `GET` | `/api/investigations` | List saved investigation sessions | **PLANNED EXTENSION** | None | `list[Investigation]` |
+| `POST` | `/api/investigations` | Save an investigation session | **PLANNED EXTENSION** | `Investigation` | `Investigation` |
 
 ---
 
 ### 6.2 Detailed Request & Response Formats
 
-#### 1. `GET /api/health`
+#### 1. `GET /api/health` `[IMPLEMENTED]`
 - **Response** (`200 OK`):
 ```json
 {
@@ -345,7 +378,7 @@ RULES:
 }
 ```
 
-#### 2. `POST /api/incidents/ingest`
+#### 2. `POST /api/incidents/ingest` `[IMPLEMENTED]`
 - **Request Body** (`application/json`):
 ```json
 {
@@ -369,19 +402,19 @@ RULES:
 ```json
 {
   "incident_id": "INC-2026-042",
-  "ingested_count": 18,
+  "ingested_count": 17,
   "status": "success"
 }
 ```
 
-#### 3. `GET /api/incidents`
+#### 3. `GET /api/incidents` `[IMPLEMENTED]`
 - **Response** (`200 OK`):
 ```json
 [
   {
     "incident_id": "INC-2026-042",
     "title": "Payment Gateway P99 Latency Spike & Cascading Connection Pool Exhaustion",
-    "event_count": 18,
+    "event_count": 17,
     "start_time": "2026-10-30T13:45:00Z",
     "end_time": "2026-10-30T14:45:00Z",
     "services_involved": ["checkout-service", "postgres-db-primary"]
@@ -389,7 +422,7 @@ RULES:
 ]
 ```
 
-#### 4. `GET /api/incidents/{incident_id}/timeline`
+#### 4. `GET /api/incidents/{incident_id}/timeline` `[IMPLEMENTED]`
 - **Query Parameters**:
   - `start_time` (string, optional): ISO-8601 string (e.g., `2026-10-30T14:00:00Z`).
   - `end_time` (string, optional): ISO-8601 string (e.g., `2026-10-30T14:30:00Z`).
@@ -398,8 +431,8 @@ RULES:
 ```json
 {
   "incident_id": "INC-2026-042",
-  "total_events": 18,
-  "filtered_count": 18,
+  "total_events": 17,
+  "filtered_count": 17,
   "events": [
     {
       "source_id": "DEPLOY-101",
@@ -417,7 +450,30 @@ RULES:
 }
 ```
 
-#### 5. `POST /api/incidents/{incident_id}/query`
+#### 5. `GET /api/incidents/{incident_id}/events/{source_id}` `[IMPLEMENTED]`
+- **Response** (`200 OK`):
+```json
+{
+  "source_id": "ALERT-201",
+  "incident_id": "INC-2026-042",
+  "timestamp": "2026-10-30T14:02:00Z",
+  "source_type": "monitoring_alert",
+  "author_or_actor": "datadog-monitor",
+  "channel_or_service": "checkout-service",
+  "summary": "CRITICAL: P99 latency breach on /checkout > 2000ms",
+  "raw_content": "CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms). Triggered by rule LatencyAlert-Prod on endpoint /api/v1/checkout.",
+  "structured_payload": {
+    "metric": "p99_latency_ms",
+    "threshold": 2000,
+    "measured_value": 2840,
+    "severity": "CRITICAL",
+    "endpoint": "/api/v1/checkout"
+  },
+  "tags": ["alert", "latency", "critical", "checkout"]
+}
+```
+
+#### 6. `POST /api/incidents/{incident_id}/query` `[PLANNED: BE-109]`
 - **Request Body** (`application/json`):
 ```json
 {
@@ -464,34 +520,17 @@ RULES:
 }
 ```
 
-#### 6. `GET /api/incidents/{incident_id}/events/{source_id}`
-- **Response** (`200 OK`):
-```json
-{
-  "source_id": "ALERT-201",
-  "incident_id": "INC-2026-042",
-  "timestamp": "2026-10-30T14:02:00Z",
-  "source_type": "monitoring_alert",
-  "author_or_actor": "datadog-monitor",
-  "channel_or_service": "checkout-service",
-  "summary": "CRITICAL: P99 latency breach on /checkout > 2000ms",
-  "raw_content": "CRITICAL: checkout-service P99 latency exceeded 2000ms threshold (measured: 2840ms). Triggered by rule LatencyAlert-Prod on endpoint /api/v1/checkout.",
-  "structured_payload": {
-    "metric": "p99_latency_ms",
-    "threshold": 2000,
-    "measured_value": 2840,
-    "severity": "CRITICAL",
-    "endpoint": "/api/v1/checkout"
-  },
-  "tags": ["alert", "latency", "critical", "checkout"]
-}
-```
+#### 7. `/api/investigations` `[PLANNED EXTENSION — Implemented in Frontend Mock/Client]`
+To enable saving multi-turn investigation findings, Person 2 introduced client methods `listInvestigations()` and `saveInvestigation()` in `frontend/src/api.ts`:
+- **`GET /api/investigations`** -> returns `list[Investigation]`
+- **`POST /api/investigations`** -> saves `Investigation` payload
+- *Current Status*: Fully functional in `mockApi.ts` using local browser / in-memory state. Backend MongoDB persistence for investigation sessions is planned after Milestone 6.
 
 ---
 
 ### 6.3 Shared TypeScript Interfaces for Frontend & Mocking
 
-Person 2 (Frontend) can use these exact types in `frontend/src/types/api.ts`:
+Person 2 (Frontend) uses these exact types in `frontend/src/types/api.ts` and `frontend/src/types/extra.ts`:
 
 ```typescript
 export type SourceType = 'slack' | 'monitoring_alert' | 'deployment_log';
@@ -554,24 +593,66 @@ export interface IncidentSummary {
   end_time: string;
   services_involved: string[];
 }
-```
 
-#### Parallel Development via Mock Service Worker / Local Mocks:
-Person 2 does not need to wait for backend deployment. The frontend can initialize `frontend/src/mocks/mockApi.ts` using the bundled demo data [`data/incidents/inc_2026_042.json`](file:///home/asus/MongoHack/data/incidents/inc_2026_042.json) to develop and verify all components immediately.
+// Multi-turn Investigation Persistence Types (from extra.ts)
+export interface InvestigationQuestion {
+  query: string;
+  answer: string;
+  citations: CitationRecord[];
+  asked_at: string;
+}
+
+export interface Investigation {
+  id: string;
+  incident_id: string;
+  title: string;
+  analyst: string;
+  is_mine: boolean;
+  status: "in_progress" | "completed";
+  question_count: number;
+  last_activity: string;
+  questions: InvestigationQuestion[];
+}
+
+export interface IngestResponse {
+  incident_id: string;
+  ingested_count: number;
+  status: string;
+}
+```
 
 ---
 
-## 7. Security, Environment, and Configuration
+## 7. Evaluation Framework & Quality Gates `[PERSON 3]`
+
+### 7.1 Golden Evaluation Benchmark (`data/eval_cases.json`) `[IMPLEMENTED]`
+Person 3 has established 6 benchmark evaluation cases covering the full incident investigation lifecycle:
+1. **EVAL-001 (First Sign of Trouble)**: Must retrieve and cite `ALERT-201` (Datadog P99 latency breach at 14:02:00Z).
+2. **EVAL-002 (Responders & Commander)**: Must cite `SLACK-301` (Alice notices) and `SLACK-302` (Bob declares SEV-1 and acts as IC).
+3. **EVAL-003 (Preceding Deployment)**: Must identify `DEPLOY-101` (checkout-service v2.4.1 commit a1f9c8d).
+4. **EVAL-004 (Recovery Evidence)**: Must cite `ALERT-205` (P99 latency recovered to 142ms) and `SLACK-307`.
+5. **EVAL-005 (Root Cause vs Unproven Hypothesis)**: Must prove pool leak in `db_pool.py` (`SLACK-305`), disprove disk full (`ALERT-203`), and identify Stripe webhook latency as unproven (`SLACK-309`).
+6. **EVAL-006 (Negative / Insufficient Evidence)**: Query asking about an expired SSL certificate on ingress must report insufficient evidence and cite zero hallucinated sources.
+
+### 7.2 Retrieval Evaluation Metrics `[PLANNED: DATA-304]`
+- **Hit Rate@5**: Must equal 100% across all golden cases.
+- **Mean Reciprocal Rank (MRR)**: Target >= 0.85.
+- **Retrieval Latency**: P95 retrieval latency < 500ms.
+- **Citation Precision**: 100% of generated citations must exist in retrieved context (zero hallucinated citations allowed).
+
+---
+
+## 8. Security, Environment, and Configuration
 
 - All secrets managed via `.env` (never committed to Git).
 - Required variables:
   - `MONGODB_URI`: Connection string to MongoDB Atlas.
   - `MONGODB_DB_NAME`: Database name (e.g. `incident_investigator`).
-  - `EMBEDDING_PROVIDER`: `"openai"` or `"gemini"`.
+  - `EMBEDDING_PROVIDER`: `"gemini"` (default) or `"openai"`.
   - `EMBEDDING_API_KEY`: API key for embeddings.
-  - `EMBEDDING_MODEL_NAME`: e.g. `text-embedding-3-small`.
-  - `LLM_PROVIDER`: `"openai"` or `"gemini"`.
+  - `EMBEDDING_MODEL_NAME`: `gemini-embedding-2` (default), `gemini-embedding-001` (supported alternative), or OpenAI `text-embedding-3-small`; all are requested/validated at 1536 dims.
+  - `EMBEDDING_DIMENSIONS`: `1536`; must match `backend/atlas_vector_index.json` (`numDimensions`).
+  - `LLM_PROVIDER`: `"gemini"` (default) or `"openai"`.
   - `LLM_API_KEY`: API key for LLM.
-  - `LLM_MODEL_NAME`: e.g. `gpt-4o-mini` or `gemini-1.5-flash`.
+  - `LLM_MODEL_NAME`: `gemini-3.8-flash` (default, free tier) or OpenAI `gpt-4o-mini`.
   - `CORS_ORIGINS`: Allowed origins (e.g. `http://localhost:5173`).
-
